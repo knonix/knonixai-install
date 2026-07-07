@@ -161,9 +161,10 @@ else
   if [[ ! -f .env ]]; then
     echo "    NOTE: no .env file found here. Copy it first: cp .env.example .env"
   fi
-  echo "    To serve over HTTPS on your own domain, add a line to .env:"
-  echo "        KNONIX_DOMAIN=ai.knonix.com"
-  echo "        KNONIX_ACME_EMAIL=you@knonix.com"
+  echo "    To serve over HTTPS on your own domain, add these lines to .env"
+  echo "    (use your fully-qualified domain, e.g. sub.domain.com):"
+  echo "        KNONIX_DOMAIN=sub.domain.com"
+  echo "        KNONIX_ACME_EMAIL=you@domain.com"
   echo "    then re-run: sudo ./install.sh"
 fi
 
