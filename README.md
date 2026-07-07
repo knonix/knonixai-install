@@ -4,17 +4,14 @@ Self-host **KnonixAI** from the prebuilt container image. Sovereign AI search
 and assistant for U.S. Government and regulated environments — local
 open-weight models run inside your boundary, so your data never has to leave.
 
-> This installer pulls a **prebuilt image** from the GitHub Container Registry
-> (GHCR). You do **not** need access to the KnonixAI source code — only
-> permission to pull the image. Knonix provides that access token when you
-> onboard.
+> This installer pulls a **prebuilt public image** from the GitHub Container
+> Registry (GHCR). You do **not** need access to the KnonixAI source code, and
+> **no token or login is required** to pull the image.
 
 ## Prerequisites
 
 - **Docker + Docker Compose v2** (`docker compose version`)
 - **~15–20 GB free disk** for the default local models
-- A **GHCR access token** with `read:packages` scope, provided by Knonix
-  (unless your image has been made public)
 - **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for GPU-accelerated
   local inference (uncomment the `deploy` block under the `ollama` service in
   `docker-compose.yml`)
@@ -30,27 +27,30 @@ cd knonixai-install
 cp .env.example .env
 # Edit .env: set POSTGRES_PASSWORD, and license values if you have them.
 
-# 3. Authenticate to GHCR and bring up the stack
-GHCR_USER=<your-github-username> GHCR_TOKEN=<token-from-knonix> ./install.sh
+# 3. Bring up the stack (no login required — the image is public)
+./install.sh
 ```
 
-The script logs in to GHCR, pulls `ghcr.io/knonix/knonixai`, starts the full
-stack, and pulls the default local models. When it finishes:
+The script pulls `ghcr.io/knonix/knonixai`, starts the full stack, and pulls
+the default local models. When it finishes:
 
 - App: <http://localhost:3000>
 - Admin dashboard: <http://localhost:3000/admin>
 
-### Already logged in, or public image?
-
-If you've already run `docker login ghcr.io` (or the image is public), just run
-`./install.sh` with no env vars.
-
 ### Manual pull (without the script)
 
 ```bash
-echo "<token>" | docker login ghcr.io -u <your-github-username> --password-stdin
 docker compose pull
 docker compose up -d
+```
+
+### Private image?
+
+If Knonix has provisioned a **private** image for your organization, pass the
+access token Knonix gave you (a GHCR token with `read:packages`):
+
+```bash
+GHCR_USER=<your-github-username> GHCR_TOKEN=<token-from-knonix> ./install.sh
 ```
 
 ## Pinning a version

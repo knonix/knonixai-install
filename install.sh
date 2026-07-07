@@ -3,19 +3,20 @@
 # install.sh — Bootstrap a KnonixAI install from the prebuilt GHCR image.
 #
 # This does NOT require access to the KnonixAI source repository. It pulls the
-# published container image, brings up the full sovereign stack (app + Ollama +
-# Postgres + Redis + SearXNG), and pulls the default local models.
+# published PUBLIC container image, brings up the full sovereign stack (app +
+# Ollama + Postgres + Redis + SearXNG), and pulls the default local models.
 #
 # Prerequisites:
 #   - Docker + Docker Compose v2
-#   - A GHCR access token with read:packages (provided by Knonix), UNLESS the
-#     image has been made public. Set it via the GHCR_TOKEN + GHCR_USER env
-#     vars, or log in beforehand with `docker login ghcr.io`.
+#
+# The image is public, so no login or token is needed. If Knonix has
+# provisioned a PRIVATE image for your org, pass the token they gave you via
+# the GHCR_USER + GHCR_TOKEN env vars (or run `docker login ghcr.io` first).
 #
 # Usage:
-#   GHCR_USER=<your-github-user> GHCR_TOKEN=<token> ./install.sh
-#   # or, if already logged in / image is public:
 #   ./install.sh
+#   # private image only:
+#   GHCR_USER=<your-github-user> GHCR_TOKEN=<token> ./install.sh
 #
 set -euo pipefail
 
@@ -45,7 +46,8 @@ if [[ ! -f .env ]]; then
   fi
 fi
 
-# 3. Authenticate to GHCR if a token was provided (needed for a private image).
+# 3. Authenticate to GHCR only if a token was provided (private-image case).
+#    The public image needs no login; this block is skipped by default.
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
   : "${GHCR_USER:?Set GHCR_USER alongside GHCR_TOKEN}"
   echo "==> Logging in to ghcr.io as ${GHCR_USER}"
@@ -58,8 +60,10 @@ TAG="${TAG:-latest}"
 echo "==> Pulling ${IMAGE}:${TAG}"
 if ! docker pull "${IMAGE}:${TAG}"; then
   echo "ERROR: could not pull ${IMAGE}:${TAG}." >&2
-  echo "       If the image is private, set GHCR_USER + GHCR_TOKEN (read:packages)" >&2
-  echo "       or run 'docker login ghcr.io' first. Contact sales@knonix.com for access." >&2
+  echo "       The image is public, so check your network/Docker setup and the" >&2
+  echo "       KNONIX_IMAGE_TAG in .env. If Knonix provisioned a PRIVATE image" >&2
+  echo "       for your org, set GHCR_USER + GHCR_TOKEN (read:packages) or run" >&2
+  echo "       'docker login ghcr.io' first. Questions: sales@knonix.com." >&2
   exit 1
 fi
 
