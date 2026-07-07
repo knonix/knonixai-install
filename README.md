@@ -44,6 +44,56 @@ docker compose pull
 docker compose up -d
 ```
 
+## Already pulled the image? Full step-by-step
+
+If you ran something like `docker pull ghcr.io/knonix/knonixai:sha-559aa42`
+yourself, that only downloads the **app image**. KnonixAI still needs the rest
+of its stack (Postgres, Redis, Ollama, SearXNG) and a config file. Do this to
+go from a bare pull to a running system:
+
+```bash
+# 1. Get this installer (it provides the compose file + config template)
+git clone https://github.com/knonix/knonixai-install.git
+cd knonixai-install
+
+# 2. Create your config
+cp .env.example .env
+
+# 3. Edit .env — at minimum:
+#      POSTGRES_PASSWORD=<a strong password>
+#      KNONIX_IMAGE_TAG=<the tag you pulled, e.g. sha-559aa42 — or v1.0.0 / latest>
+#    (A version tag like v1.0.0 or latest is recommended over a raw sha- tag.)
+
+# 4. Start the whole stack (app + Postgres + Redis + Ollama + SearXNG)
+docker compose up -d
+
+# 5. Pull the default local models into Ollama (first run only; a few minutes)
+docker compose exec ollama ollama pull llama3.1:8b
+docker compose exec ollama ollama pull nemotron-mini:4b
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Database migrations run **automatically** the first time the `knonixai`
+container starts — there is no manual migrate step.
+
+When it finishes:
+
+- App: <http://localhost:3000>
+- Admin dashboard: <http://localhost:3000/admin> (pull more models, view seats)
+
+> If you pulled a `sha-...` tag directly, set `KNONIX_IMAGE_TAG` to that same
+> tag in `.env` so Compose runs the image you already downloaded. Otherwise
+> Compose defaults to `latest` and will pull that instead.
+
+### Verify it's running
+
+```bash
+docker compose ps                        # all services should be "running"/healthy
+docker compose logs -f knonixai          # watch app startup + migrations
+curl -fsS http://localhost:3000 >/dev/null && echo "KnonixAI is up"
+docker compose exec ollama ollama list   # confirm the local models are present
+```
+
 ### Private image?
 
 If Knonix has provisioned a **private** image for your organization, pass the
