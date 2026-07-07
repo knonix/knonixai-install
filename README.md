@@ -10,7 +10,21 @@ open-weight models run inside your boundary, so your data never has to leave.
 
 ## Prerequisites
 
-- **Docker + Docker Compose v2** (`docker compose version`)
+- **Docker Engine** (`docker version`)
+- **Docker Compose v2** — the `docker compose` **subcommand** (a space, not a
+  hyphen). Check with `docker compose version`. If that errors with
+  `unknown shorthand flag: 'd' in -d`, you have the old standalone
+  `docker-compose` (v1) or no Compose plugin. Install v2 on Ubuntu/Debian:
+
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y docker-compose-plugin
+  docker compose version   # should now print v2.x
+  ```
+
+  (If that package isn't found, add Docker's official apt repo first — see
+  <https://docs.docker.com/engine/install/>.)
+
 - **~15–20 GB free disk** for the default local models
 - **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for GPU-accelerated
   local inference (uncomment the `deploy` block under the `ollama` service in
