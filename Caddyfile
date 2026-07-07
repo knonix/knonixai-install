@@ -1,0 +1,44 @@
+# KnonixAI reverse proxy (Caddy)
+#
+# Automatic HTTPS via Let's Encrypt. Caddy provisions and renews certificates
+# for {$KNONIX_DOMAIN} automatically on first request. No port numbers, no
+# manual certs.
+#
+# Requirements for public HTTPS:
+#   - A DNS A/AAAA record for KNONIX_DOMAIN pointing at this host's public IP
+#   - Ports 80 and 443 reachable from the internet (Let's Encrypt HTTP/TLS
+#     challenges)
+#   - KNONIX_ACME_EMAIL set (used for expiry/renewal notices)
+#
+# For local testing without a real domain, set KNONIX_DOMAIN=localhost — Caddy
+# then serves HTTPS with a locally-trusted internal CA (no Let's Encrypt).
+
+{
+	email {$KNONIX_ACME_EMAIL}
+	# For staging/testing against Let's Encrypt without hitting rate limits,
+	# uncomment the next line:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$KNONIX_DOMAIN} {
+	encode zstd gzip
+
+	# App (Next.js) — everything routes here by default.
+	reverse_proxy knonixai:3000
+
+	# The admin dashboard is served by the app at /admin, so it is reachable
+	# at https://{$KNONIX_DOMAIN}/admin with no port number.
+
+	# Optional: expose self-hosted search under a path instead of a port.
+	# Uncomment to serve SearXNG at https://{$KNONIX_DOMAIN}/search-engine/
+	# handle_path /search-engine/* {
+	# 	reverse_proxy searxng:8080
+	# }
+
+	header {
+		# Basic hardening
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

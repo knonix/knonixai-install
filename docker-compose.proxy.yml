@@ -1,0 +1,43 @@
+# Caddy reverse-proxy overlay for KnonixAI (image-only installer).
+#
+# Adds automatic HTTPS (Let's Encrypt) in front of the app so it is reachable
+# at https://<your-domain>/ and https://<your-domain>/admin with NO port
+# numbers. Apply on top of the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+#
+# install.sh does this automatically when KNONIX_DOMAIN is set in .env.
+#
+# Requires KNONIX_DOMAIN (and KNONIX_ACME_EMAIL for public certs) in .env.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      KNONIX_DOMAIN: ${KNONIX_DOMAIN:?set KNONIX_DOMAIN in .env}
+      KNONIX_ACME_EMAIL: ${KNONIX_ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # persisted certs (survives restarts)
+      - caddy_config:/config
+    depends_on:
+      - knonixai
+
+  # When fronted by Caddy, the app should not publish port 3000 on the host.
+  # Caddy reaches it over the internal Docker network by service name.
+  knonixai:
+    ports: !reset []
+    environment:
+      # Tell the app its public origin so absolute URLs / auth callbacks are
+      # correct behind the proxy.
+      NEXT_PUBLIC_BASE_URL: https://${KNONIX_DOMAIN}
+      KNONIX_PUBLIC_URL: https://${KNONIX_DOMAIN}
+
+volumes:
+  caddy_data:
+  caddy_config:

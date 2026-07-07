@@ -26,6 +26,15 @@ set -euo pipefail
 
 IMAGE="ghcr.io/knonix/knonixai"
 COMPOSE_FILE="docker-compose.yml"
+PROXY_FILE="docker-compose.proxy.yml"
+
+# Read a KEY=value from .env (last match wins), stripped of surrounding quotes.
+read_env() {
+  local key="$1" v
+  v="$(grep -E "^${key}=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+  printf '%s' "$v"
+}
 
 echo "==> KnonixAI install"
 
@@ -122,8 +131,31 @@ if [[ -n "${GHCR_TOKEN:-}" ]]; then
   echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 fi
 
+# 3b. Decide whether to front the app with the HTTPS reverse proxy. If a
+#     domain is configured in .env, we add the Caddy overlay so the app is
+#     served at https://<domain>/ with automatic Let's Encrypt certs. If not,
+#     the app is published on http://localhost:3000.
+KNONIX_DOMAIN="$(read_env KNONIX_DOMAIN)"
+COMPOSE_ARGS=(-f "${COMPOSE_FILE}")
+if [[ -n "${KNONIX_DOMAIN}" ]]; then
+  if [[ ! -f "${PROXY_FILE}" ]]; then
+    echo "ERROR: KNONIX_DOMAIN is set but ${PROXY_FILE} is missing." >&2
+    echo "       Re-clone the installer (git pull) so the proxy overlay is present." >&2
+    exit 1
+  fi
+  COMPOSE_ARGS+=(-f "${PROXY_FILE}")
+  echo "==> Domain mode: serving at https://${KNONIX_DOMAIN} (Caddy + Let's Encrypt)"
+  if [[ "${KNONIX_DOMAIN}" != "localhost" && -z "$(read_env KNONIX_ACME_EMAIL)" ]]; then
+    echo "    NOTE: KNONIX_ACME_EMAIL is empty. Set it in .env for cert-expiry notices."
+  fi
+  echo "    Requirements: DNS A/AAAA for ${KNONIX_DOMAIN} -> this host, and ports 80+443 open."
+else
+  echo "==> Local mode: serving at http://localhost:3000 (no domain configured)"
+  echo "    To serve over HTTPS on your own domain, set KNONIX_DOMAIN in .env and re-run."
+fi
+
 # 4. Pull the image and bring the stack up.
-TAG="$(grep -E '^KNONIX_IMAGE_TAG=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+TAG="$(read_env KNONIX_IMAGE_TAG)"
 TAG="${TAG:-latest}"
 echo "==> Pulling ${IMAGE}:${TAG}"
 if ! docker pull "${IMAGE}:${TAG}"; then
@@ -136,19 +168,28 @@ if ! docker pull "${IMAGE}:${TAG}"; then
 fi
 
 echo "==> Starting the KnonixAI stack"
-docker compose -f "${COMPOSE_FILE}" up -d
+docker compose "${COMPOSE_ARGS[@]}" up -d
 
 # 5. Pull the default sovereign models into Ollama.
 echo "==> Pulling default local models (llama3.1:8b, nemotron-mini:4b, nomic-embed-text)"
 echo "    (this can take several minutes on first run)"
 for model in llama3.1:8b nemotron-mini:4b nomic-embed-text; do
-  docker compose -f "${COMPOSE_FILE}" exec -T ollama ollama pull "${model}" || \
+  docker compose "${COMPOSE_ARGS[@]}" exec -T ollama ollama pull "${model}" || \
     echo "WARNING: failed to pull ${model} — you can pull it later from /admin."
 done
 
 echo
 echo "==> KnonixAI is up."
-echo "    App:   http://localhost:3000"
-echo "    Admin: http://localhost:3000/admin"
+if [[ -n "${KNONIX_DOMAIN}" ]]; then
+  echo "    App:   https://${KNONIX_DOMAIN}"
+  echo "    Admin: https://${KNONIX_DOMAIN}/admin"
+  echo
+  echo "    First HTTPS request may take a few seconds while Caddy issues the"
+  echo "    Let's Encrypt certificate. If it fails, confirm DNS points here and"
+  echo "    ports 80+443 are open, then: docker compose ${COMPOSE_ARGS[*]} logs caddy"
+else
+  echo "    App:   http://localhost:3000"
+  echo "    Admin: http://localhost:3000/admin"
+fi
 echo
-echo "    Manage the stack with: docker compose -f ${COMPOSE_FILE} ps | logs | down"
+echo "    Manage the stack with: docker compose ${COMPOSE_ARGS[*]} ps | logs | down"

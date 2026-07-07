@@ -39,7 +39,9 @@ cd knonixai-install
 
 # 2. Configure
 cp .env.example .env
-# Edit .env: set POSTGRES_PASSWORD, and license values if you have them.
+# Edit .env: set POSTGRES_PASSWORD, and — to serve over HTTPS on your own
+# domain — set KNONIX_DOMAIN and KNONIX_ACME_EMAIL (see "Serving over HTTPS"
+# below). Add license values if you have them.
 
 # 3. Bring up the stack (no login required — the image is public)
 ./install.sh
@@ -48,8 +50,10 @@ cp .env.example .env
 The script pulls `ghcr.io/knonix/knonixai`, starts the full stack, and pulls
 the default local models. When it finishes:
 
-- App: <http://localhost:3000>
-- Admin dashboard: <http://localhost:3000/admin>
+- **No domain set** → App at <http://localhost:3000>, admin at `/admin`.
+- **`KNONIX_DOMAIN` set** → the installer automatically adds a Caddy reverse
+  proxy with **automatic HTTPS**, so the app is served at
+  `https://<your-domain>/` and `https://<your-domain>/admin` — no port numbers.
 
 ### Manual pull (without the script)
 
@@ -117,6 +121,48 @@ access token Knonix gave you (a GHCR token with `read:packages`):
 GHCR_USER=<your-github-username> GHCR_TOKEN=<token-from-knonix> ./install.sh
 ```
 
+## Serving over HTTPS on your own domain
+
+Set a domain and the installer handles everything else — a bundled
+[Caddy](https://caddyserver.com) reverse proxy obtains and auto-renews a free
+**Let's Encrypt** certificate, and the app is served with no port numbers.
+
+In `.env`:
+
+```bash
+KNONIX_DOMAIN=ai.example.com
+KNONIX_ACME_EMAIL=admin@example.com   # for cert-expiry notices
+```
+
+Then run (or re-run) the installer:
+
+```bash
+./install.sh
+```
+
+When it finishes the app is live at `https://ai.example.com` (admin at
+`https://ai.example.com/admin`).
+
+**Requirements for public HTTPS:**
+
+- A DNS **A/AAAA record** for your domain pointing at this host's public IP.
+- Ports **80** and **443** reachable from the internet (Let's Encrypt uses them
+  to validate the certificate).
+
+The first HTTPS request may take a few seconds while Caddy issues the
+certificate. If it doesn't come up, check the proxy logs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml logs caddy
+```
+
+> **Local HTTPS test:** set `KNONIX_DOMAIN=localhost` to serve HTTPS with a
+> locally-trusted internal CA (no Let's Encrypt, no public DNS needed).
+>
+> **Already running on localhost?** Just add `KNONIX_DOMAIN` (+ email) to `.env`
+> and re-run `./install.sh` — it recreates the stack behind the proxy. Your data
+> in the Docker volumes is preserved.
+
 ## Pinning a version
 
 Set `KNONIX_IMAGE_TAG` in `.env` to a specific release for reproducible
@@ -164,6 +210,12 @@ docker compose logs -f knonixai           # watch startup + migrations
 **Roll back** if an update misbehaves — pin `KNONIX_IMAGE_TAG` back to the
 previous version in `.env`, then `docker compose pull && docker compose up -d`.
 Because data is in volumes, rolling the image back does not lose chat history.
+
+> **Serving on a domain?** Re-running `./install.sh` is the simplest way to
+> update — it re-applies the HTTPS proxy automatically. If you run `docker
+compose` by hand instead, include both files so the proxy stays up:
+> `docker compose -f docker-compose.yml -f docker-compose.proxy.yml pull && \`
+> `docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d`
 
 > **Tip:** run pinned version tags (e.g. `v1.1.0`) rather than `latest` in
 > production so upgrades are deliberate and every host runs the same build.
