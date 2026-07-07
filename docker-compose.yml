@@ -172,7 +172,9 @@ services:
       # Optional in-boundary SMTP for real confirmation/recovery emails.
       GOTRUE_SMTP_ADMIN_EMAIL: ${KNONIX_AUTH_SMTP_ADMIN_EMAIL:-}
       GOTRUE_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
-      GOTRUE_SMTP_PORT: ${KNONIX_AUTH_SMTP_PORT:-}
+      # Must be a valid integer even when SMTP is unused (auto-confirm mode):
+      # GoTrue parses this as an int and refuses to start on an empty string.
+      GOTRUE_SMTP_PORT: ${KNONIX_AUTH_SMTP_PORT:-587}
       GOTRUE_SMTP_USER: ${KNONIX_AUTH_SMTP_USER:-}
       GOTRUE_SMTP_PASS: ${KNONIX_AUTH_SMTP_PASS:-}
       GOTRUE_SMTP_SENDER_NAME: ${KNONIX_AUTH_SMTP_SENDER_NAME:-KnonixAI}
