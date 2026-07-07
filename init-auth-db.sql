@@ -1,0 +1,22 @@
+--
+-- KnonixAI — Postgres bootstrap for self-hosted Supabase Auth (GoTrue).
+--
+-- The install reuses the same Postgres instance that stores chat history for
+-- the GoTrue auth tables, keeping everything inside one sovereign boundary
+-- (no external database, no cloud Supabase).
+--
+-- GoTrue runs its OWN migrations to create the tables it needs inside the
+-- `auth` schema on first start. This script only pre-creates that schema so
+-- GoTrue's migrations have somewhere to run, and it runs as the default
+-- database superuser (POSTGRES_USER) so no extra roles are required.
+--
+-- Docker runs every *.sql in /docker-entrypoint-initdb.d exactly once, on the
+-- FIRST initialization of an empty data volume. On existing volumes this file
+-- is ignored; create the schema manually if you are adding auth to an
+-- already-initialized database:
+--
+--   docker compose exec postgres \
+--     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+--     -c 'CREATE SCHEMA IF NOT EXISTS auth;'
+--
+CREATE SCHEMA IF NOT EXISTS auth;

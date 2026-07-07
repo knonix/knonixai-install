@@ -1,0 +1,89 @@
+_format_version: '2.1'
+_transform: true
+
+#
+# KnonixAI — Kong declarative config (API gateway in front of GoTrue).
+#
+# Purpose: KnonixAI's browser + server code talks to Supabase Auth through the
+# standard Supabase URL shape (`${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/*`) and
+# sends the anon/service JWT in an `apikey` header. Kong terminates that shape,
+# validates the `apikey`, strips the `/auth/v1` prefix, and forwards to the
+# GoTrue container which serves auth endpoints at its root path.
+#
+# This is intentionally the auth-only subset of the upstream Supabase Kong
+# config — there is no PostgREST / Realtime / Storage / Studio route, because
+# KnonixAI only ever calls `supabase.auth.*`.
+#
+# The two consumers below map to the two Supabase keys the app already uses:
+#   - anon        -> NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (browser)
+#   - service_role -> SUPABASE_SECRET_KEY (server / admin)
+# Their `key` values are the JWTs you generate from KNONIX_AUTH_JWT_SECRET
+# (see .env.local.example for generation instructions). Kong substitutes the
+# ${VAR} placeholders below from the environment at container start.
+#
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: $SUPABASE_ANON_KEY
+  - username: service_role
+    keyauth_credentials:
+      - key: $SUPABASE_SERVICE_KEY
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  #
+  # GoTrue (Supabase Auth). Public verify/callback/health endpoints are open;
+  # everything else requires a valid apikey (anon or service_role).
+  #
+  - name: auth-v1-open
+    url: 'http://supabase-auth:9999/verify'
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+  - name: auth-v1-open-callback
+    url: 'http://supabase-auth:9999/callback'
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+  - name: auth-v1-open-authorize
+    url: 'http://supabase-auth:9999/authorize'
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths:
+          - /auth/v1/authorize
+    plugins:
+      - name: cors
+  - name: auth-v1
+    _comment: 'GoTrue: /auth/v1/* -> http://supabase-auth:9999/*'
+    url: 'http://supabase-auth:9999/'
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon

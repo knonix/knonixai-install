@@ -55,11 +55,30 @@ the default local models. When it finishes:
   proxy with **automatic HTTPS**, so the app is served at
   `https://<your-domain>/` and `https://<your-domain>/admin` — no port numbers.
 
+### User accounts (on by default)
+
+The installer sets up **multi-user accounts automatically** — local
+email/password plus optional Google and Microsoft (Entra) sign-in — using a
+self-hosted GoTrue + Kong auth stack that runs next to the app and reuses the
+bundled Postgres. **Nothing leaves your boundary; no cloud Supabase is used.**
+`install.sh` generates the signing secret and API keys, wires the URLs, and
+creates the auth schema for you. Just open the app and click **Sign up** — the
+first account works immediately (no email server required).
+
+- **Add Google/Microsoft sign-in:** fill in the `KNONIX_AUTH_*` OAuth values in
+  `.env` and re-run `./install.sh`. Set each provider's redirect URL to
+  `<NEXT_PUBLIC_SUPABASE_URL>/auth/v1/callback`.
+- **Single-user / no login:** set `ENABLE_AUTH=false` in `.env`.
+
 ### Manual pull (without the script)
 
 ```bash
 docker compose pull
-docker compose up -d
+# --profile auth starts the GoTrue + Kong auth services. install.sh adds this
+# automatically; include it here when auth is enabled (the default). It also
+# expects the KNONIX_AUTH_* keys/URLs in .env — easiest is to run ./install.sh
+# once so it generates them, or set ENABLE_AUTH=false to skip auth entirely.
+docker compose --profile auth up -d
 ```
 
 ## Already pulled the image? Full step-by-step

@@ -6,11 +6,19 @@
 # container image, granted with a scoped token — see README.md.
 #
 # Services:
-#   knonixai  - Next.js app (KnonixAI)
-#   ollama    - Sovereign local LLM runtime (models run inside your boundary)
-#   postgres  - Chat history / persistence
-#   redis     - Caching / rate limiting
-#   searxng   - Self-hosted metasearch (data stays in-boundary)
+#   knonixai       - Next.js app (KnonixAI)
+#   ollama         - Sovereign local LLM runtime (models run inside your boundary)
+#   postgres       - Chat history / persistence / auth tables
+#   redis          - Caching / rate limiting
+#   searxng        - Self-hosted metasearch (data stays in-boundary)
+#   supabase-auth  - GoTrue auth server (local + Google/Microsoft sign-in)
+#   supabase-kong  - API gateway that fronts GoTrue (NEXT_PUBLIC_SUPABASE_URL)
+#
+# Authentication is OFF by default (ENABLE_AUTH=false, single-tenant anonymous
+# mode). To let users create real accounts entirely in-boundary, set
+# ENABLE_AUTH=true plus the KNONIX_AUTH_* / SUPABASE_* variables described in
+# .env.local.example, then `docker compose up -d`. No cloud Supabase is used;
+# GoTrue + Kong run next to your app and reuse the Postgres above.
 #
 # Pin KNONIX_IMAGE_TAG in .env to a specific version (e.g. v1.2.0) for
 # reproducible deployments. It defaults to "latest".
@@ -28,6 +36,13 @@ services:
       DATABASE_SSL_DISABLED: 'true'
       ENABLE_AUTH: ${ENABLE_AUTH:-false}
       ANONYMOUS_USER_ID: ${ANONYMOUS_USER_ID:-docker-anonymous}
+      # Self-hosted Supabase Auth (only used when ENABLE_AUTH=true). The URL
+      # points at the in-boundary Kong gateway below; the keys are the anon /
+      # service_role JWTs you mint from KNONIX_AUTH_JWT_SECRET (see
+      # .env.local.example). All auth traffic stays inside this compose network.
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       KNONIX_CLOUD_DEPLOYMENT: 'false'
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
@@ -90,6 +105,9 @@ services:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Pre-create the `auth` schema for GoTrue on first init (runs once, on an
+      # empty data volume). Harmless when auth is disabled.
+      - ./init-auth-db.sql:/docker-entrypoint-initdb.d/00-init-auth-db.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-knonixai}']
       interval: 10s
@@ -111,6 +129,109 @@ services:
     env_file: .env
     volumes:
       - searxng_data:/data
+
+  # --- Self-hosted Supabase Auth (only started/used when ENABLE_AUTH=true) ---
+  #
+  # GoTrue is the Supabase Auth server. It reuses the Postgres above (auth
+  # tables live in the `auth` schema) so identities never leave your boundary.
+  # Local email/password + Google + Microsoft (Entra) sign-in all terminate
+  # here. GoTrue runs its own DB migrations on first start.
+  supabase-auth:
+    image: supabase/gotrue:v2.177.0
+    restart: unless-stopped
+    # Only started when auth is enabled. install.sh passes `--profile auth`
+    # automatically when ENABLE_AUTH=true; with auth off these services stay
+    # down so they never crash-loop on missing keys.
+    profiles: ['auth']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: '9999'
+      # Public URL of the auth API as seen by browsers/providers = Kong + /auth/v1.
+      API_EXTERNAL_URL: ${KNONIX_AUTH_API_EXTERNAL_URL:-http://localhost:8000/auth/v1}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}?sslmode=disable
+      GOTRUE_DB_NAMESPACE: auth
+      # Where users land after auth; must match your app's public origin.
+      GOTRUE_SITE_URL: ${KNONIX_AUTH_SITE_URL:-http://localhost:3000}
+      # Comma-separated glob allow-list for post-auth redirects (OAuth callback).
+      GOTRUE_URI_ALLOW_LIST: ${KNONIX_AUTH_ADDITIONAL_REDIRECT_URLS:-http://localhost:3000/**}
+      GOTRUE_JWT_SECRET: ${KNONIX_AUTH_JWT_SECRET:-}
+      GOTRUE_JWT_EXP: '3600'
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      # Email/password signups.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${KNONIX_AUTH_ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_DISABLE_SIGNUP: ${KNONIX_AUTH_DISABLE_SIGNUP:-false}
+      # Auto-confirm so accounts work WITHOUT wiring an SMTP server. Set to
+      # false only after you configure the SMTP_* variables below.
+      GOTRUE_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
+      # Optional in-boundary SMTP for real confirmation/recovery emails.
+      GOTRUE_SMTP_ADMIN_EMAIL: ${KNONIX_AUTH_SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${KNONIX_AUTH_SMTP_PORT:-}
+      GOTRUE_SMTP_USER: ${KNONIX_AUTH_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${KNONIX_AUTH_SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${KNONIX_AUTH_SMTP_SENDER_NAME:-KnonixAI}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      # Google Workspace sign-in.
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${KNONIX_AUTH_GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${KNONIX_AUTH_GOOGLE_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${KNONIX_AUTH_API_EXTERNAL_URL:-http://localhost:8000/auth/v1}/callback
+      # Microsoft / Entra sign-in. Set AZURE_URL to your tenant authority to
+      # restrict to a single tenant (defaults to the multi-tenant 'common').
+      GOTRUE_EXTERNAL_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
+      GOTRUE_EXTERNAL_AZURE_CLIENT_ID: ${KNONIX_AUTH_AZURE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_AZURE_SECRET: ${KNONIX_AUTH_AZURE_SECRET:-}
+      GOTRUE_EXTERNAL_AZURE_REDIRECT_URI: ${KNONIX_AUTH_API_EXTERNAL_URL:-http://localhost:8000/auth/v1}/callback
+      GOTRUE_EXTERNAL_AZURE_URL: ${KNONIX_AUTH_AZURE_URL:-}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:9999/health'
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+
+  # Kong API gateway. Fronts GoTrue with the Supabase URL shape
+  # (`/auth/v1/*`) and validates the anon / service_role apikey. This service's
+  # published port is what you put in NEXT_PUBLIC_SUPABASE_URL.
+  supabase-kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    profiles: ['auth']
+    depends_on:
+      supabase-auth:
+        condition: service_started
+    ports:
+      - '${KNONIX_AUTH_KONG_HTTP_PORT:-8000}:8000'
+      - '${KNONIX_AUTH_KONG_HTTPS_PORT:-8443}:8443'
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      # Injected into kong.yml (declarative config uses ${...} placeholders).
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SECRET_KEY:-}
+    volumes:
+      - ./kong.yml:/home/kong/temp.yml:ro
+    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
 
 volumes:
   postgres_data:

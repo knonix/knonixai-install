@@ -23,7 +23,16 @@
 {$KNONIX_DOMAIN} {
 	encode zstd gzip
 
-	# App (Next.js) — everything routes here by default.
+	# Self-hosted auth gateway (GoTrue via Kong). Requests to
+	# https://{$KNONIX_DOMAIN}/supabase/* are forwarded to Kong with the
+	# /supabase prefix stripped, so the app's NEXT_PUBLIC_SUPABASE_URL can be
+	# https://{$KNONIX_DOMAIN}/supabase. Active only when auth is enabled; the
+	# route is harmless if the Kong service isn't running.
+	handle_path /supabase/* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	# App (Next.js) — everything else routes here by default.
 	reverse_proxy knonixai:3000
 
 	# The admin dashboard is served by the app at /admin, so it is reachable

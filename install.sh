@@ -129,6 +129,101 @@ if [[ ! -f .env ]]; then
   fi
 fi
 
+# 2b. Provision self-hosted auth (GoTrue + Kong) fully automatically.
+#
+#     When ENABLE_AUTH=true (the default), the app needs a JWT secret plus an
+#     anon and a service_role API key (both are HS256-signed JWTs), and a
+#     Supabase URL pointing at the bundled Kong gateway. Rather than make the
+#     operator generate these by hand, we mint any that are missing and write
+#     them back into .env so the stack is self-configuring. Re-runs are
+#     idempotent: existing values are preserved.
+
+# Base64url (no padding) from stdin.
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+# Sign a Supabase-style JWT for a given role using the shared secret.
+#   mint_supabase_jwt <role> <secret>
+mint_supabase_jwt() {
+  local role="$1" secret="$2" header payload iat exp signing_input sig
+  header='{"alg":"HS256","typ":"JWT"}'
+  iat="$(date +%s)"
+  # ~10 years so keys don't silently expire on long-lived on-prem installs.
+  exp=$((iat + 315360000))
+  payload="{\"role\":\"${role}\",\"iss\":\"supabase\",\"iat\":${iat},\"exp\":${exp}}"
+  signing_input="$(printf '%s' "$header" | b64url).$(printf '%s' "$payload" | b64url)"
+  sig="$(printf '%s' "$signing_input" \
+    | openssl dgst -binary -sha256 -hmac "$secret" | b64url)"
+  printf '%s.%s' "$signing_input" "$sig"
+}
+
+# Append KEY=value to .env only if the key is not already set (uncommented).
+set_env_if_absent() {
+  local key="$1" val="$2"
+  if [[ -n "$(read_env "$key")" ]]; then
+    return 0  # already set by the operator or a previous run
+  fi
+  # Replace a commented placeholder line if present; otherwise append.
+  if grep -qE "^[[:space:]]*#[[:space:]]*${key}[[:space:]]*=" .env 2>/dev/null; then
+    # Portable in-place edit (GNU + BSD sed).
+    sed -i.bak -E "s|^[[:space:]]*#[[:space:]]*${key}[[:space:]]*=.*|${key}=${val}|" .env \
+      && rm -f .env.bak
+  else
+    printf '\n%s=%s\n' "$key" "$val" >> .env
+  fi
+}
+
+AUTH_ENABLED="$(read_env ENABLE_AUTH)"
+AUTH_ENABLED="${AUTH_ENABLED:-true}"
+if [[ "${AUTH_ENABLED}" == "true" ]]; then
+  echo "==> Provisioning self-hosted auth (GoTrue + Kong)"
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "ERROR: openssl is required to generate auth keys but was not found." >&2
+    echo "       Install it (e.g. 'sudo apt-get install -y openssl') and re-run," >&2
+    echo "       or set ENABLE_AUTH=false in .env for single-user mode." >&2
+    exit 1
+  fi
+
+  # 1) Shared JWT secret (generate once, reuse forever).
+  AUTH_SECRET="$(read_env KNONIX_AUTH_JWT_SECRET)"
+  if [[ -z "${AUTH_SECRET}" ]]; then
+    AUTH_SECRET="$(openssl rand -hex 32)"
+    set_env_if_absent KNONIX_AUTH_JWT_SECRET "${AUTH_SECRET}"
+    echo "    Generated KNONIX_AUTH_JWT_SECRET"
+  fi
+
+  # 2) anon + service_role API keys (JWTs signed with the secret above). Only
+  #    (re)mint if BOTH are missing, so we never rotate keys out from under an
+  #    existing deployment.
+  ANON_KEY="$(read_env NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+  SERVICE_KEY="$(read_env SUPABASE_SECRET_KEY)"
+  if [[ -z "${ANON_KEY}" && -z "${SERVICE_KEY}" ]]; then
+    ANON_KEY="$(mint_supabase_jwt anon "${AUTH_SECRET}")"
+    SERVICE_KEY="$(mint_supabase_jwt service_role "${AUTH_SECRET}")"
+    set_env_if_absent NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "${ANON_KEY}"
+    set_env_if_absent SUPABASE_SECRET_KEY "${SERVICE_KEY}"
+    echo "    Generated anon + service_role API keys"
+  fi
+
+  # 3) Public URLs. In domain mode the app + auth are fronted by Caddy at
+  #    https://<domain>/ and the gateway is reachable at .../supabase; in local
+  #    mode Kong is published on :8000 and the app on :3000.
+  AUTH_DOMAIN="$(read_env KNONIX_DOMAIN)"
+  if [[ -n "${AUTH_DOMAIN}" && "${AUTH_DOMAIN}" != "localhost" ]]; then
+    SUPABASE_URL="https://${AUTH_DOMAIN}/supabase"
+    SITE_URL="https://${AUTH_DOMAIN}"
+  else
+    SUPABASE_URL="http://localhost:8000"
+    SITE_URL="http://localhost:3000"
+  fi
+  set_env_if_absent NEXT_PUBLIC_SUPABASE_URL "${SUPABASE_URL}"
+  set_env_if_absent KNONIX_AUTH_API_EXTERNAL_URL "${SUPABASE_URL}/auth/v1"
+  set_env_if_absent KNONIX_AUTH_SITE_URL "${SITE_URL}"
+  set_env_if_absent KNONIX_AUTH_ADDITIONAL_REDIRECT_URLS "${SITE_URL}/**"
+  echo "    Auth URL: ${SUPABASE_URL}  (accounts + Google/Microsoft sign-in)"
+else
+  echo "==> Auth disabled (ENABLE_AUTH=false) — single-user / anonymous mode"
+fi
+
 # 3. Authenticate to GHCR only if a token was provided (private-image case).
 #    The public image needs no login; this block is skipped by default.
 if [[ -n "${GHCR_TOKEN:-}" ]]; then
@@ -143,6 +238,10 @@ fi
 #     the app is published on http://localhost:3000.
 KNONIX_DOMAIN="$(read_env KNONIX_DOMAIN)"
 COMPOSE_ARGS=(-f "${COMPOSE_FILE}")
+# Start the auth services (GoTrue + Kong) only when auth is enabled.
+if [[ "${AUTH_ENABLED}" == "true" ]]; then
+  COMPOSE_ARGS+=(--profile auth)
+fi
 if [[ -n "${KNONIX_DOMAIN}" ]]; then
   if [[ ! -f "${PROXY_FILE}" ]]; then
     echo "ERROR: KNONIX_DOMAIN is set but ${PROXY_FILE} is missing." >&2
@@ -184,6 +283,36 @@ fi
 echo "==> Starting the KnonixAI stack"
 docker compose "${COMPOSE_ARGS[@]}" up -d
 
+# 4b. When auth is on, ensure the `auth` schema exists. The Postgres init
+#     script only runs on a brand-new data volume, so on installs where the DB
+#     already existed we create it here (idempotent). GoTrue then runs its own
+#     migrations into that schema on start. We wait for Postgres to report
+#     healthy first so the psql call doesn't race the container.
+if [[ "${AUTH_ENABLED}" == "true" ]]; then
+  echo "==> Ensuring the auth schema exists in Postgres"
+  PG_USER="$(read_env POSTGRES_USER)"; PG_USER="${PG_USER:-knonixai}"
+  PG_DB="$(read_env POSTGRES_DB)"; PG_DB="${PG_DB:-knonixai}"
+  schema_ready=""
+  for _ in $(seq 1 30); do
+    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+         pg_isready -U "${PG_USER}" >/dev/null 2>&1; then
+      schema_ready=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ -n "${schema_ready}" ]]; then
+    docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      psql -U "${PG_USER}" -d "${PG_DB}" -c 'CREATE SCHEMA IF NOT EXISTS auth;' \
+      >/dev/null 2>&1 \
+      && echo "    auth schema is ready." \
+      || echo "WARNING: could not create the auth schema automatically; GoTrue may create it on start."
+  else
+    echo "WARNING: Postgres did not become ready in time; skipping schema check."
+    echo "         GoTrue will attempt to create the auth schema on start."
+  fi
+fi
+
 # 5. Pull the default sovereign models into Ollama.
 echo "==> Pulling default local models (llama3.1:8b, nemotron-mini:4b, nomic-embed-text)"
 echo "    (this can take several minutes on first run)"
@@ -204,6 +333,13 @@ if [[ -n "${KNONIX_DOMAIN}" ]]; then
 else
   echo "    App:   http://localhost:3000"
   echo "    Admin: http://localhost:3000/admin"
+fi
+if [[ "${AUTH_ENABLED}" == "true" ]]; then
+  echo
+  echo "    Accounts are ENABLED. Open the app and click Sign up to create the"
+  echo "    first account (email/password works immediately — no email server"
+  echo "    needed). To add Google/Microsoft sign-in, fill in the KNONIX_AUTH_*"
+  echo "    OAuth values in .env and re-run this script."
 fi
 echo
 echo "    Manage the stack with: docker compose ${COMPOSE_ARGS[*]} ps | logs | down"
