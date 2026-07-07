@@ -6,6 +6,10 @@
 # published PUBLIC container image, brings up the full sovereign stack (app +
 # Ollama + Postgres + Redis + SearXNG), and pulls the default local models.
 #
+# Preflight checks (and, where possible, auto-fixes): docker + Compose v2
+# present, and the Docker daemon running (auto-started via systemd/service/
+# dockerd if it is down).
+#
 # Prerequisites:
 #   - Docker + Docker Compose v2
 #
@@ -31,8 +35,72 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 if ! docker compose version >/dev/null 2>&1; then
-  echo "ERROR: Docker Compose v2 is required (docker compose ...)." >&2
+  echo "ERROR: Docker Compose v2 is required (the 'docker compose' subcommand)." >&2
+  echo "       Install it, e.g.: sudo apt-get install -y docker-compose-plugin" >&2
   exit 1
+fi
+
+# 1b. Ensure the Docker daemon is running and reachable. Auto-start it if not.
+wait_for_docker() {
+  # Poll `docker info` for up to ~30s; return 0 once the daemon responds.
+  for _ in $(seq 1 30); do
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+if ! docker info >/dev/null 2>&1; then
+  # Distinguish "daemon down" from "running but I lack permission".
+  err="$(docker info 2>&1 || true)"
+  if echo "$err" | grep -qi "permission denied"; then
+    echo "ERROR: cannot access the Docker socket (permission denied)." >&2
+    echo "       Re-run with sudo:            sudo ./install.sh" >&2
+    echo "       ...or add yourself to docker: sudo usermod -aG docker \$USER && newgrp docker" >&2
+    exit 1
+  fi
+
+  echo "==> Docker daemon not reachable — attempting to start it"
+  # Prefer root for daemon management; use sudo if available and not already root.
+  SUDO=""
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      SUDO="sudo"
+    else
+      echo "ERROR: Docker daemon is not running and I can't elevate to start it." >&2
+      echo "       Start it manually (e.g. 'sudo systemctl start docker') and re-run." >&2
+      exit 1
+    fi
+  fi
+
+  started=""
+  if command -v systemctl >/dev/null 2>&1; then
+    echo "    Trying: ${SUDO:+sudo }systemctl start docker"
+    $SUDO systemctl start docker >/dev/null 2>&1 && started=1 || true
+    # Best-effort: enable on boot so this doesn't recur.
+    $SUDO systemctl enable docker >/dev/null 2>&1 || true
+  fi
+  if [[ -z "$started" ]] && command -v service >/dev/null 2>&1; then
+    echo "    Trying: ${SUDO:+sudo }service docker start"
+    $SUDO service docker start >/dev/null 2>&1 && started=1 || true
+  fi
+  if [[ -z "$started" ]] && command -v dockerd >/dev/null 2>&1; then
+    # No init system (minimal hosts / some WSL setups): launch dockerd directly.
+    echo "    Trying: ${SUDO:+sudo }dockerd (background)"
+    $SUDO sh -c 'dockerd >/var/log/dockerd.log 2>&1 &' && started=1 || true
+  fi
+
+  if ! wait_for_docker; then
+    echo "ERROR: Docker daemon did not become reachable." >&2
+    echo "       Start it manually and re-run:" >&2
+    echo "         sudo systemctl enable --now docker   # systemd hosts" >&2
+    echo "         sudo dockerd &                        # no-systemd hosts" >&2
+    echo "       Diagnose with: sudo journalctl -u docker --no-pager -n 40" >&2
+    exit 1
+  fi
+  echo "    Docker daemon is up."
 fi
 
 # 2. Ensure a .env exists.

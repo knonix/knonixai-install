@@ -128,6 +128,48 @@ KNONIX_IMAGE_TAG=v1.2.0
 
 Leave it as `latest` to always pull the newest published image.
 
+## Updating KnonixAI
+
+Updates ship as new container images — you pull the newer image and recreate
+the app container. Your data (Postgres, Redis, Ollama models, SearXNG) lives in
+named Docker volumes and is **preserved** across updates. Database schema
+migrations run **automatically** when the new container starts.
+
+**Update to the latest image:**
+
+```bash
+cd knonixai-install
+git pull                                    # get any installer/compose changes
+docker compose pull                         # fetch the newest image
+docker compose up -d                        # recreate changed containers
+```
+
+**Update to a specific version** (recommended for production — reproducible):
+
+```bash
+# 1. Set the target release in .env
+#    KNONIX_IMAGE_TAG=v1.1.0
+# 2. Apply it
+docker compose pull
+docker compose up -d
+```
+
+**Confirm the new version is running:**
+
+```bash
+docker compose images knonixai            # shows the image tag now in use
+docker compose logs -f knonixai           # watch startup + migrations
+```
+
+**Roll back** if an update misbehaves — pin `KNONIX_IMAGE_TAG` back to the
+previous version in `.env`, then `docker compose pull && docker compose up -d`.
+Because data is in volumes, rolling the image back does not lose chat history.
+
+> **Tip:** run pinned version tags (e.g. `v1.1.0`) rather than `latest` in
+> production so upgrades are deliberate and every host runs the same build.
+> Before a major upgrade, back up the Postgres volume
+> (`docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql`).
+
 ## Licensing & seats
 
 KnonixAI is **free for 2 active seats**. Beyond that, per-seat licensing
