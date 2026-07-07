@@ -1,0 +1,9 @@
+# Local environment — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Docker / runtime artifacts
+*.log
+data/
+volumes/

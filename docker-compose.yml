@@ -1,0 +1,119 @@
+# KnonixAI — image-only Docker Compose for self-hosted installs.
+#
+# This file pulls the prebuilt KnonixAI image from the GitHub Container
+# Registry (GHCR). It does NOT build from source, so you do NOT need access to
+# the KnonixAI source repository. You only need read (pull) access to the
+# container image, granted with a scoped token — see README.md.
+#
+# Services:
+#   knonixai  - Next.js app (KnonixAI)
+#   ollama    - Sovereign local LLM runtime (models run inside your boundary)
+#   postgres  - Chat history / persistence
+#   redis     - Caching / rate limiting
+#   searxng   - Self-hosted metasearch (data stays in-boundary)
+#
+# Pin KNONIX_IMAGE_TAG in .env to a specific version (e.g. v1.2.0) for
+# reproducible deployments. It defaults to "latest".
+
+name: knonixai
+services:
+  knonixai:
+    image: ghcr.io/knonix/knonixai:${KNONIX_IMAGE_TAG:-latest}
+    pull_policy: always
+    command: npx next start -H 0.0.0.0
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
+      DATABASE_RESTRICTED_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
+      DATABASE_SSL_DISABLED: 'true'
+      ENABLE_AUTH: ${ENABLE_AUTH:-false}
+      ANONYMOUS_USER_ID: ${ANONYMOUS_USER_ID:-docker-anonymous}
+      KNONIX_CLOUD_DEPLOYMENT: 'false'
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
+      # In "connected" mode the install sends a privacy-preserving heartbeat to
+      # your license service so seats can be metered/billed. See README.md.
+      KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-free}
+      KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-2}
+      KNONIX_LICENSE_KEY: ${KNONIX_LICENSE_KEY:-}
+      KNONIX_INSTANCE_ID: ${KNONIX_INSTANCE_ID:-}
+      KNONIX_LICENSE_SERVICE_URL: ${KNONIX_LICENSE_SERVICE_URL:-}
+      KNONIX_LICENSE_SERVICE_TOKEN: ${KNONIX_LICENSE_SERVICE_TOKEN:-}
+      KNONIX_LICENSE_TOKEN: ${KNONIX_LICENSE_TOKEN:-}
+      KNONIX_LICENSE_PUBLIC_KEY: ${KNONIX_LICENSE_PUBLIC_KEY:-}
+      # Frontier APIs are OFF by default (enabling them sends data OUTSIDE your
+      # boundary — non-sovereign).
+      KNONIX_ALLOW_FRONTIER: ${KNONIX_ALLOW_FRONTIER:-false}
+      LOCAL_REDIS_URL: ${LOCAL_REDIS_URL:-redis://redis:6379}
+      SEARCH_API: ${SEARCH_API:-searxng}
+      SEARXNG_API_URL: ${SEARXNG_API_URL:-http://searxng:8080}
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      searxng:
+        condition: service_started
+      ollama:
+        condition: service_started
+
+  # Sovereign local LLM runtime. Models run entirely inside your boundary.
+  # After the first `up`, pull the default models with:
+  #   docker compose exec ollama ollama pull llama3.1:8b
+  #   docker compose exec ollama ollama pull nemotron-mini:4b
+  #   docker compose exec ollama ollama pull nomic-embed-text
+  # (or use the admin dashboard's one-click model pull at /admin).
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - '${OLLAMA_PORT:-11434}:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment to enable NVIDIA GPU acceleration (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-knonixai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knonixai}
+      POSTGRES_DB: ${POSTGRES_DB:-knonixai}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-knonixai}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  searxng:
+    image: searxng/searxng
+    ports:
+      - '${SEARXNG_PORT:-8080}:8080'
+    env_file: .env
+    volumes:
+      - searxng_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  searxng_data:
+  ollama_data:
