@@ -224,6 +224,14 @@ else
   echo "==> Auth disabled (ENABLE_AUTH=false) — single-user / anonymous mode"
 fi
 
+# 2c. SearXNG needs a non-empty secret_key. Generate one once and persist it so
+#     the self-hosted search backend starts cleanly and serves JSON to the app.
+SEARXNG_SECRET_VAL="$(read_env SEARXNG_SECRET)"
+if [[ -z "${SEARXNG_SECRET_VAL}" ]] && command -v openssl >/dev/null 2>&1; then
+  set_env_if_absent SEARXNG_SECRET "$(openssl rand -hex 32)"
+  echo "==> Generated SEARXNG_SECRET"
+fi
+
 # 3. Authenticate to GHCR only if a token was provided (private-image case).
 #    The public image needs no login; this block is skipped by default.
 if [[ -n "${GHCR_TOKEN:-}" ]]; then

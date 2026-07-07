@@ -1,0 +1,30 @@
+# KnonixAI — SearXNG settings.
+#
+# SearXNG ships locked down by default: it only returns HTML and its bot
+# limiter rejects programmatic requests, which makes the app's search calls
+# fail with "403 Forbidden". This file opens JSON output and disables the
+# limiter for the app-to-SearXNG calls inside the private Docker network, while
+# keeping everything self-hosted (no external search dependency).
+#
+# SEARXNG_SECRET is injected from the environment by install.sh (generated once
+# and written to .env), so this file carries no baked-in secret.
+
+use_default_settings: true
+
+server:
+  # Overridden at runtime by the SEARXNG_SECRET env var; must be non-empty.
+  secret_key: '${SEARXNG_SECRET}'
+  # The app talks to SearXNG over the internal Docker network, not a browser,
+  # so the bot limiter must be off or every API call is rejected (403).
+  limiter: false
+  image_proxy: true
+
+search:
+  # Enable JSON output so the app can consume results. Without "json" here,
+  # SearXNG returns 403 to any format=json request.
+  formats:
+    - html
+    - json
+
+# Keep the default engine set; this is metasearch over public engines, run
+# from inside your boundary. Trim or extend engines here as needed.
