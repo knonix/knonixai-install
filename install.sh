@@ -29,9 +29,15 @@ COMPOSE_FILE="docker-compose.yml"
 PROXY_FILE="docker-compose.proxy.yml"
 
 # Read a KEY=value from .env (last match wins), stripped of surrounding quotes.
+# Tolerates an optional `export ` prefix, leading whitespace, and spaces around
+# the `=`, and ignores commented (#) lines, so hand-edited .env files just work.
 read_env() {
   local key="$1" v
-  v="$(grep -E "^${key}=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  v="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" .env 2>/dev/null \
+        | grep -vE "^[[:space:]]*#" | tail -1 | cut -d= -f2- || true)"
+  # Trim leading/trailing whitespace.
+  v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+  # Strip one layer of surrounding single or double quotes.
   v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
   printf '%s' "$v"
 }
@@ -151,7 +157,14 @@ if [[ -n "${KNONIX_DOMAIN}" ]]; then
   echo "    Requirements: DNS A/AAAA for ${KNONIX_DOMAIN} -> this host, and ports 80+443 open."
 else
   echo "==> Local mode: serving at http://localhost:3000 (no domain configured)"
-  echo "    To serve over HTTPS on your own domain, set KNONIX_DOMAIN in .env and re-run."
+  echo "    KNONIX_DOMAIN was empty (checked $(pwd)/.env)."
+  if [[ ! -f .env ]]; then
+    echo "    NOTE: no .env file found here. Copy it first: cp .env.example .env"
+  fi
+  echo "    To serve over HTTPS on your own domain, add a line to .env:"
+  echo "        KNONIX_DOMAIN=ai.knonix.com"
+  echo "        KNONIX_ACME_EMAIL=you@knonix.com"
+  echo "    then re-run: sudo ./install.sh"
 fi
 
 # 4. Pull the image and bring the stack up.
