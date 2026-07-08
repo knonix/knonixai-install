@@ -8,315 +8,295 @@ open-weight models run inside your boundary, so your data never has to leave.
 > Registry (GHCR). You do **not** need access to the KnonixAI source code, and
 > **no token or login is required** to pull the image.
 
-## Data disk (Azure / recommended)
+| Doc | Audience |
+|-----|----------|
+| **[EASY_SETUP.md](./EASY_SETUP.md)** | Non-technical install (3 steps + first-day checklist) |
+| **[FEATURES.md](./FEATURES.md)** | Full product features (Spaces, SKILL.md, productivity, connectors, …) |
+| **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
+| **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | CPU / RAM / disk sizing |
 
-If your VM has a second volume (e.g. **30 GB** at `/mnt/knonix-data`), KnonixAI
-should store Docker images, layer snapshots, Ollama models, and Postgres data
-there — **not** on the small OS disk.
+---
 
-`install.sh` runs `scripts/setup-data-disk.sh` automatically when that mount
-exists. It configures:
+## What you get after install
 
-| Path | Purpose |
-| ---- | ------- |
-| `/mnt/knonix-data/docker` | Docker images + named volumes (Postgres, Ollama, …) |
-| `/mnt/knonix-data/containerd` | Container layer snapshots (this is what fills root if misconfigured) |
+| Capability | Description |
+|------------|-------------|
+| **Sovereign chat** | Local Ollama models by default; web search via in-stack SearXNG |
+| **Spaces** | Team agent boxes — each with its own personality and tools |
+| **SKILL.md** | Upload a personality file per space |
+| **Productivity hub** | Vault · MEMORY.md · skill packs · MCP registry · approve-to-write · jobs · canvas · tabular review · digests · CUI flags |
+| **Connectors** | Microsoft 365 + Google (search/read; actions require human approval) |
+| **Knowledge / RAG** | Local embeddings — documents stay on your install |
+| **Code workspace** | GitHub / GitLab / local projects under `/code` |
+| **Admin** | License, seats, members, models, connectors, setup health |
+| **Auth** | Email sign-up; optional Entra (incl. GCC High) / Google SSO |
 
-Manual run (safe to repeat):
+See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
 
-```bash
-sudo ./scripts/setup-data-disk.sh --prune-build-cache
-```
-
-Ensure `/etc/fstab` mounts the data disk at boot (UUID example):
-
-```
-UUID=... /mnt/knonix-data ext4 defaults,nofail,discard 0 2
-```
+---
 
 ## Prerequisites
 
 - **Docker Engine** (`docker version`)
-- **Docker Compose v2** — the `docker compose` **subcommand** (a space, not a
-  hyphen). Check with `docker compose version`. If that errors with
-  `unknown shorthand flag: 'd' in -d`, you have the old standalone
-  `docker-compose` (v1) or no Compose plugin. Install v2 on Ubuntu/Debian:
+- **Docker Compose v2** — `docker compose version` (plugin, not old `docker-compose` v1)
 
   ```bash
   sudo apt-get update
   sudo apt-get install -y docker-compose-plugin
-  docker compose version   # should now print v2.x
+  docker compose version
   ```
 
-  (If that package isn't found, add Docker's official apt repo first — see
-  <https://docs.docker.com/engine/install/>.)
+- **50 GB+ free disk** for Docker data (images + models + DB). See
+  [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md).
+- **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for faster local inference
+  (uncomment the `deploy` block under `ollama` in `docker-compose.yml`).
 
-- **~15–20 GB free disk** for the default local models
-- **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for GPU-accelerated
-  local inference (uncomment the `deploy` block under the `ollama` service in
-  `docker-compose.yml`)
+---
 
-## Quick start
+## Quick start (recommended)
 
 ```bash
-# 1. Get this installer (public repo — no source access needed)
 git clone https://github.com/knonix/knonixai-install.git
 cd knonixai-install
-
-# 2. Configure
-cp .env.example .env
-# Edit .env: set POSTGRES_PASSWORD, and — to serve over HTTPS on your own
-# domain — set KNONIX_DOMAIN and KNONIX_ACME_EMAIL (see "Serving over HTTPS"
-# below). Add license values if you have them.
-
-# 3. Bring up the stack (no login required — the image is public)
 ./install.sh
 ```
 
-The script pulls `ghcr.io/knonix/knonixai`, starts the full stack, and pulls
-the default local models. When it finishes:
+Non-technical walkthrough: **[EASY_SETUP.md](./EASY_SETUP.md)**.
 
-- **No domain set** → App at <http://localhost:3000>, admin at `/admin`.
-- **`KNONIX_DOMAIN` set** → the installer automatically adds a Caddy reverse
-  proxy with **automatic HTTPS**, so the app is served at
-  `https://<your-domain>/` and `https://<your-domain>/admin` — no port numbers.
+### Wizard prompts
 
-### User accounts (on by default)
+| Prompt | Why |
+|--------|-----|
+| **Postgres password** | Protects your database (required; Enter = secure random) |
+| **Public domain** (optional) | Enables HTTPS via Caddy + Let’s Encrypt |
+| **Email for certificates** | Cert expiry notices when domain is set |
+| **Fleet enrollment token** | From Knonix — seat tracking on the fleet board (blank = free/local mode) |
 
-The installer sets up **multi-user accounts automatically** — local
-email/password plus optional Google and Microsoft (Entra) sign-in — using a
-self-hosted GoTrue + Kong auth stack that runs next to the app and reuses the
-bundled Postgres. **Nothing leaves your boundary; no cloud Supabase is used.**
-`install.sh` generates the signing secret and API keys, wires the URLs, and
-creates the auth schema for you. Just open the app and click **Sign up** — the
-first account works immediately (no email server required).
-
-- **Add Google/Microsoft sign-in:** fill in the `KNONIX_AUTH_*` OAuth values in
-  `.env` and re-run `./install.sh`. Set the Entra redirect URL to
-  `https://<your-domain>/supabase/auth/v1/callback`.
-- **Single-user / no login:** set `ENABLE_AUTH=false` in `.env`.
-
-### Microsoft 365 (Entra app + connectors)
-
-To let users **sign in with Microsoft** and **search SharePoint, OneDrive,
-Outlook, and Teams** from chat, register one Entra enterprise application:
-
-1. Follow **[Microsoft 365 setup](https://github.com/knonix/KnonixAI/blob/main/docs/MICROSOFT_365_SETUP.md)** (redirect URIs, Graph permissions, client secret).
-2. Set `KNONIX_AUTH_AZURE_*` and `KNONIX_MS_OAUTH_*` in `.env`, **or** paste the
-   connector client id/secret in **Admin → Connectors** on the running app.
-3. Users connect their own account under **Admin → Connectors → Connect account**.
-
-The in-app **Set up Microsoft 365** panel on the Connectors page lists the exact
-redirect URLs for your host.
-
-### Manual pull (without the script)
-
-```bash
-docker compose pull
-# --profile auth starts the GoTrue + Kong auth services. install.sh adds this
-# automatically; include it here when auth is enabled (the default). It also
-# expects the KNONIX_AUTH_* keys/URLs in .env — easiest is to run ./install.sh
-# once so it generates them, or set ENABLE_AUTH=false to skip auth entirely.
-docker compose --profile auth up -d
-```
-
-## Already pulled the image? Full step-by-step
-
-If you ran something like `docker pull ghcr.io/knonix/knonixai:sha-559aa42`
-yourself, that only downloads the **app image**. KnonixAI still needs the rest
-of its stack (Postgres, Redis, Ollama, SearXNG) and a config file. Do this to
-go from a bare pull to a running system:
-
-```bash
-# 1. Get this installer (it provides the compose file + config template)
-git clone https://github.com/knonix/knonixai-install.git
-cd knonixai-install
-
-# 2. Create your config
-cp .env.example .env
-
-# 3. Edit .env — at minimum:
-#      POSTGRES_PASSWORD=<a strong password>
-#      KNONIX_IMAGE_TAG=<the tag you pulled, e.g. sha-559aa42 — or v1.0.0 / latest>
-#    (A version tag like v1.0.0 or latest is recommended over a raw sha- tag.)
-
-# 4. Start the whole stack (app + Postgres + Redis + Ollama + SearXNG)
-docker compose up -d
-
-# 5. Pull the default local models into Ollama (first run only; a few minutes)
-docker compose exec ollama ollama pull llama3.1:8b
-docker compose exec ollama ollama pull nemotron-mini:4b
-docker compose exec ollama ollama pull nomic-embed-text
-```
-
-Database migrations run **automatically** the first time the `knonixai`
-container starts — there is no manual migrate step.
+The installer also **auto-generates** auth JWT keys, heartbeat secret, and
+connector encryption keys so you do not hand-edit secrets.
 
 When it finishes:
 
-- App: <http://localhost:3000>
-- Admin dashboard: <http://localhost:3000/admin> (pull more models, view seats)
+- **No domain** → <http://localhost:3000>
+- **Domain set** → `https://<your-domain>/` and `/admin`
 
-> If you pulled a `sha-...` tag directly, set `KNONIX_IMAGE_TAG` to that same
-> tag in `.env` so Compose runs the image you already downloaded. Otherwise
-> Compose defaults to `latest` and will pull that instead.
+### First login (required)
 
-### Verify it's running
+1. Open **`/auth/sign-up`** — first account becomes the **organization owner**.
+2. Open **`/admin`** — License & Seats, local models, health.
+3. Open **`/admin/members`** — invite colleagues (each active member = 1 seat).
+4. Optional: **Admin → Connectors** for Microsoft 365 / Google.
+5. Open **`/spaces`** — create a Space; set **SKILL.md** and **Productivity**.
 
-```bash
-docker compose ps                        # all services should be "running"/healthy
-docker compose logs -f knonixai          # watch app startup + migrations
-curl -fsS http://localhost:3000 >/dev/null && echo "KnonixAI is up"
-docker compose exec ollama ollama list   # confirm the local models are present
-```
-
-### Private image?
-
-If Knonix has provisioned a **private** image for your organization, pass the
-access token Knonix gave you (a GHCR token with `read:packages`):
+### Verify
 
 ```bash
-GHCR_USER=<your-github-username> GHCR_TOKEN=<token-from-knonix> ./install.sh
+./scripts/verify-install.sh
+curl -fsS http://localhost:3000/api/knonix/health   # or https://your-domain/...
 ```
 
-## Serving over HTTPS on your own domain
+---
 
-Set a domain and the installer handles everything else — a bundled
-[Caddy](https://caddyserver.com) reverse proxy obtains and auto-renews a free
-**Let's Encrypt** certificate, and the app is served with no port numbers.
+## Install settings (`.env`)
+
+Copy `.env.example` → `.env`, or let `./install.sh` create it.
+
+### Settings you usually care about
+
+| Variable | Required? | Purpose |
+|----------|-----------|---------|
+| `POSTGRES_PASSWORD` | **Yes** | Database password |
+| `KNONIX_LICENSE_SERVICE_TOKEN` | Connected mode | Fleet enrollment token from Knonix |
+| `KNONIX_DOMAIN` | Prod HTTPS | Public hostname |
+| `KNONIX_ACME_EMAIL` | With domain | Let’s Encrypt notices |
+| `KNONIX_IMAGE_TAG` | Prod | Pin release (`v1.x.x`) instead of `latest` |
+| `KNONIX_MODEL` | Optional | Default chat model (`qwen2.5:7b`) |
+| `KNONIX_CODING_MODEL` | Optional | Coding model (`qwen2.5-coder:7b`) |
+| `OLLAMA_NUM_CTX` | Optional | Context size (default tuned for CPU hosts) |
+| `KNONIX_FREE_SEATS` | Optional | Free seats per install (default `1`) |
+| `KNONIX_LICENSE_MODE` | Optional | `connected` · `free` · `offline` |
+| `KNONIX_ALLOW_FRONTIER` | Optional | `false` by default — cloud models leave boundary |
+| `KNONIX_RAG_ENABLED` | Optional | Local document search (`true`) |
+| `ENABLE_AUTH` | Optional | Multi-user (`true`) |
+| `KNONIX_MS_OAUTH_*` | Optional | Microsoft 365 connector app |
+| `KNONIX_AUTH_AZURE_*` | Optional | Entra SSO (incl. GCC High URL) |
+| `KNONIX_AUTH_GOOGLE_*` | Optional | Google SSO |
+| `KNONIX_AUTH_SMTP_*` | Optional | Password-reset mail |
+| `KNONIX_GITHUB_TOKEN` / `KNONIX_GITLAB_TOKEN` | Optional | Private repo clones for `/code` |
+
+**Full table of every variable:** **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)**  
+Also see comments in **[.env.example](./.env.example)**.
+
+### Licensing modes (summary)
+
+| Mode | Env | Behavior |
+|------|-----|----------|
+| **Connected** (default) | `KNONIX_LICENSE_MODE=connected` + fleet token | Daily heartbeat (no PII); seats on fleet board |
+| **Free / local** | No token → installer may set `free` | Local free seats only |
+| **Offline / air-gap** | `offline` + license token/public key from sales | No network to Knonix |
+
+---
+
+## HTTPS on your domain
 
 In `.env`:
 
 ```bash
 KNONIX_DOMAIN=ai.example.com
-KNONIX_ACME_EMAIL=admin@example.com   # for cert-expiry notices
+KNONIX_ACME_EMAIL=admin@example.com
 ```
-
-Then run (or re-run) the installer:
 
 ```bash
 ./install.sh
 ```
 
-When it finishes the app is live at `https://ai.example.com` (admin at
-`https://ai.example.com/admin`).
-
-**Requirements for public HTTPS:**
-
-- A DNS **A/AAAA record** for your domain pointing at this host's public IP.
-- Ports **80** and **443** reachable from the internet (Let's Encrypt uses them
-  to validate the certificate).
-
-The first HTTPS request may take a few seconds while Caddy issues the
-certificate. If it doesn't come up, check the proxy logs:
+**Requirements:** DNS A/AAAA to this host; ports **80** and **443** open.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.proxy.yml logs caddy
 ```
 
-> **Local HTTPS test:** set `KNONIX_DOMAIN=localhost` to serve HTTPS with a
-> locally-trusted internal CA (no Let's Encrypt, no public DNS needed).
->
-> **Already running on localhost?** Just add `KNONIX_DOMAIN` (+ email) to `.env`
-> and re-run `./install.sh` — it recreates the stack behind the proxy. Your data
-> in the Docker volumes is preserved.
+Local HTTPS test: `KNONIX_DOMAIN=localhost` (internal CA, no public DNS).
 
-## Pinning a version
+---
 
-Set `KNONIX_IMAGE_TAG` in `.env` to a specific release for reproducible
-deployments:
+## Manual pull / compose-only path
 
 ```bash
+git clone https://github.com/knonix/knonixai-install.git
+cd knonixai-install
+cp .env.example .env
+# Edit: POSTGRES_PASSWORD, optional domain + fleet token, KNONIX_IMAGE_TAG
+docker compose up -d
+docker compose exec ollama ollama pull qwen2.5:7b
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Database migrations run **automatically** when the `knonixai` container starts.
+
+### Private image?
+
+```bash
+GHCR_USER=<github-user> GHCR_TOKEN=<token-from-knonix> ./install.sh
+```
+
+---
+
+## Day-1 product tour (after install)
+
+1. **Sign up** at `/auth/sign-up`
+2. **Admin** — confirm license + models at `/admin`
+3. **Members** — add seats
+4. **Connectors** (optional) — link M365 / Google
+5. **Spaces** → create a space  
+   - **Settings → SKILL.md** — upload personality or use template  
+   - **Settings → Productivity**  
+     - **Vault** — paste policies/contracts  
+     - **Memory** — durable facts  
+     - **Skill packs** — Apply “Compliance Reviewer” etc.  
+     - **Approvals** — approve agent write proposals  
+     - **Jobs / Canvas / Tabular / Digest / Flags** as needed  
+6. Start a **space chat** and ask a real work question  
+
+Setup progress API (signed-in): `GET /api/knonix/setup-checklist`  
+Health: `GET /api/knonix/health`
+
+---
+
+## Pinning a version & updates
+
+```bash
+# .env
 KNONIX_IMAGE_TAG=v1.2.0
 ```
 
-Leave it as `latest` to always pull the newest published image.
-
-## Updating KnonixAI
-
-Updates ship as new container images — you pull the newer image and recreate
-the app container. Your data (Postgres, Redis, Ollama models, SearXNG) lives in
-named Docker volumes and is **preserved** across updates. Database schema
-migrations run **automatically** when the new container starts.
-
-**Update to the latest image:**
-
 ```bash
-cd knonixai-install
-git pull                                    # get any installer/compose changes
-docker compose pull                         # fetch the newest image
-docker compose up -d                        # recreate changed containers
-```
-
-**Update to a specific version** (recommended for production — reproducible):
-
-```bash
-# 1. Set the target release in .env
-#    KNONIX_IMAGE_TAG=v1.1.0
-# 2. Apply it
+git pull
 docker compose pull
 docker compose up -d
 ```
 
-**Confirm the new version is running:**
+Data lives in Docker volumes and is **preserved**. Migrations run on startup.
+Prefer version tags over `latest` in production.
+
+With HTTPS:
 
 ```bash
-docker compose images knonixai            # shows the image tag now in use
-docker compose logs -f knonixai           # watch startup + migrations
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml pull
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
 ```
 
-**Roll back** if an update misbehaves — pin `KNONIX_IMAGE_TAG` back to the
-previous version in `.env`, then `docker compose pull && docker compose up -d`.
-Because data is in volumes, rolling the image back does not lose chat history.
+Or simply re-run `./install.sh`.
 
-> **Serving on a domain?** Re-running `./install.sh` is the simplest way to
-> update — it re-applies the HTTPS proxy automatically. If you run `docker
-compose` by hand instead, include both files so the proxy stays up:
-> `docker compose -f docker-compose.yml -f docker-compose.proxy.yml pull && \`
-> `docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d`
-
-> **Tip:** run pinned version tags (e.g. `v1.1.0`) rather than `latest` in
-> production so upgrades are deliberate and every host runs the same build.
-> Before a major upgrade, back up the Postgres volume
-> (`docker compose exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql`).
-
-## Licensing & seats
-
-KnonixAI is **free for 2 active seats**. Beyond that, per-seat licensing
-applies ($40 / seat / month). A seat = a user active in the last 30 days.
-
-- **Connected mode** — the install sends a periodic, privacy-preserving
-  heartbeat to the Knonix License Service (`https://ai.knonix.com`) so seats are
-  metered and billed. Set `KNONIX_LICENSE_MODE=connected` plus the
-  `KNONIX_LICENSE_*` values in `.env` (provided by Knonix).
-- **Offline / air-gapped mode** — no connectivity. Validates a signed license
-  token locally. For **3+ seats offline**, contact **sales@knonix.com** to
-  purchase an on-premises offline license.
-
-The heartbeat payload contains **no PII** — only an opaque install hash, the
-license key, an integer seat count, and a version string. You can preview
-exactly what would be sent:
-
-```bash
-curl -H "Authorization: Bearer $KNONIX_HEARTBEAT_SECRET" \
-  http://localhost:3000/api/knonix/heartbeat
-```
+---
 
 ## Frontier APIs (optional, non-sovereign)
 
-Anthropic / OpenAI / Grok / Google are **off by default**. Enabling them sends
-data outside your boundary. Set `KNONIX_ALLOW_FRONTIER=true` and the relevant
-API key in `.env` only where your compliance boundary allows it.
+```bash
+KNONIX_ALLOW_FRONTIER=true
+# OPENAI_API_KEY=...  ANTHROPIC_API_KEY=...  GROK_API_KEY=...
+```
+
+**Off by default.** Enabling sends data outside your boundary.
+
+---
+
+## Disk maintenance
+
+```bash
+./scripts/disk-maintenance.sh
+./scripts/disk-maintenance.sh --prune
+docker compose exec ollama ollama list
+```
+
+See [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md).
+
+---
+
+## OAuth redirect URIs
+
+When `KNONIX_DOMAIN` is set, the installer configures public URLs for callbacks.
+
+**M365 connectors:**
+
+```text
+https://<KNONIX_DOMAIN>/api/knonix/connectors/microsoft/callback
+```
+
+**SSO (Entra / Google):**
+
+```text
+<NEXT_PUBLIC_SUPABASE_URL>/auth/v1/callback
+```
+
+---
 
 ## Common commands
 
 ```bash
-docker compose ps                 # service status
-docker compose logs -f knonixai   # app logs
-docker compose down               # stop the stack (keeps data volumes)
-docker compose pull && docker compose up -d   # upgrade to the latest image
+docker compose ps
+docker compose logs -f knonixai
+docker compose down                 # stops stack; keeps volumes
+docker compose pull && docker compose up -d
+./scripts/verify-install.sh
 ```
+
+---
+
+## Documentation index
+
+| File | Contents |
+|------|----------|
+| [EASY_SETUP.md](./EASY_SETUP.md) | Non-technical 3-step install |
+| [FEATURES.md](./FEATURES.md) | Product features (Spaces, productivity, connectors, admin) |
+| [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Full `.env` reference |
+| [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware sizing |
+| [.env.example](./.env.example) | Annotated config template |
+
+Source product docs (developers): [knonix/KnonixAI](https://github.com/knonix/KnonixAI) → `docs/`
+
+---
 
 ## Support
 
-- Access / licensing / on-prem offline licenses: **sales@knonix.com**
+- Access / licensing / offline licenses: **sales@knonix.com**

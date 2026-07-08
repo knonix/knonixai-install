@@ -43,6 +43,10 @@ read_env() {
 }
 
 echo "==> KnonixAI install"
+echo
+echo "    Easy setup guide: EASY_SETUP.md  (for non-technical installers)"
+echo "    You only need Docker. Answer the prompts or press Enter for defaults."
+echo
 
 # 1. Preflight: docker + compose present.
 if ! command -v docker >/dev/null 2>&1; then
@@ -122,10 +126,133 @@ fi
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
-    echo "Created .env from .env.example."
+    echo "Created .env from .env.example"
   else
     echo "ERROR: no .env or .env.example found in $(pwd)." >&2
     exit 1
+  fi
+fi
+
+# Interactive prompt (TTY only). Non-interactive installs keep existing .env.
+prompt_value() {
+  local prompt="$1" default="$2" var=""
+  if [[ ! -t 0 ]]; then
+    printf '%s' "${default}"
+    return 0
+  fi
+  if [[ -n "${default}" ]]; then
+    read -r -p "${prompt} [${default}]: " var || true
+    printf '%s' "${var:-$default}"
+  else
+    read -r -p "${prompt}: " var || true
+    printf '%s' "${var}"
+  fi
+}
+
+# Write KEY=value into .env (replace existing uncommented line or append).
+set_env() {
+  local key="$1" val="$2"
+  if grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" .env 2>/dev/null; then
+    sed -i.bak -E "s|^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=.*|${key}=${val}|" .env \
+      && rm -f .env.bak
+  elif grep -qE "^[[:space:]]*#[[:space:]]*${key}[[:space:]]*=" .env 2>/dev/null; then
+    sed -i.bak -E "s|^[[:space:]]*#[[:space:]]*${key}[[:space:]]*=.*|${key}=${val}|" .env \
+      && rm -f .env.bak
+  else
+    printf '\n%s=%s\n' "$key" "$val" >> .env
+  fi
+}
+
+# 2a. Guided configuration — only the fields companies always need.
+echo "==> Checking required configuration"
+NEED_WIZARD=0
+PG_PASS_NOW="$(read_env POSTGRES_PASSWORD)"
+if [[ -z "${PG_PASS_NOW}" || "${PG_PASS_NOW}" == "change-me-in-production" || "${PG_PASS_NOW}" == "knonixai" ]]; then
+  NEED_WIZARD=1
+fi
+FLEET_TOKEN_NOW="$(read_env KNONIX_LICENSE_SERVICE_TOKEN)"
+LICENSE_MODE_NOW="$(read_env KNONIX_LICENSE_MODE)"
+LICENSE_MODE_NOW="${LICENSE_MODE_NOW:-connected}"
+
+if [[ -t 0 ]]; then
+  echo
+  echo "    KnonixAI customer setup (press Enter to accept defaults)."
+  echo "    Docs: https://github.com/knonix/knonixai-install"
+  echo
+
+  if [[ "${NEED_WIZARD}" -eq 1 ]]; then
+    GEN_PG="$(openssl rand -base64 24 2>/dev/null | tr -d '/+=' | head -c 24 || echo "Kn0n1x$(date +%s)")"
+    NEW_PG="$(prompt_value "Postgres password (required — store this securely)" "${GEN_PG}")"
+    set_env POSTGRES_PASSWORD "${NEW_PG}"
+    echo "    Saved POSTGRES_PASSWORD"
+  fi
+
+  CURRENT_DOMAIN="$(read_env KNONIX_DOMAIN)"
+  NEW_DOMAIN="$(prompt_value "Public domain for HTTPS (blank = localhost only)" "${CURRENT_DOMAIN}")"
+  if [[ -n "${NEW_DOMAIN}" ]]; then
+    set_env KNONIX_DOMAIN "${NEW_DOMAIN}"
+    CURRENT_EMAIL="$(read_env KNONIX_ACME_EMAIL)"
+    NEW_EMAIL="$(prompt_value "Email for HTTPS certificate notices" "${CURRENT_EMAIL}")"
+    if [[ -n "${NEW_EMAIL}" ]]; then
+      set_env KNONIX_ACME_EMAIL "${NEW_EMAIL}"
+    fi
+  fi
+
+  echo
+  echo "    Fleet seat reporting (connected mode):"
+  echo "    Knonix tracks seat counts via a privacy-preserving heartbeat."
+  echo "    Paste the fleet enrollment token from your Knonix license email."
+  echo "    Leave blank only for offline/local-only free tier (no fleet board)."
+  NEW_TOKEN="$(prompt_value "KNONIX_LICENSE_SERVICE_TOKEN (fleet enrollment)" "${FLEET_TOKEN_NOW}")"
+  if [[ -n "${NEW_TOKEN}" ]]; then
+    set_env KNONIX_LICENSE_SERVICE_TOKEN "${NEW_TOKEN}"
+    set_env KNONIX_LICENSE_MODE "connected"
+    if [[ -z "$(read_env KNONIX_LICENSE_SERVICE_URL)" ]]; then
+      set_env KNONIX_LICENSE_SERVICE_URL "https://ai.knonix.com"
+    fi
+    echo "    Fleet enrollment token saved (connected mode)."
+  else
+    if [[ "${LICENSE_MODE_NOW}" == "connected" && -z "${FLEET_TOKEN_NOW}" ]]; then
+      echo "    No fleet token — switching to free (local) mode. You can add a token later."
+      set_env KNONIX_LICENSE_MODE "free"
+    fi
+  fi
+else
+  # Non-interactive: refuse known-bad default passwords in production-ish configs.
+  if [[ "${PG_PASS_NOW}" == "change-me-in-production" ]]; then
+    echo "ERROR: POSTGRES_PASSWORD is still 'change-me-in-production'." >&2
+    echo "       Edit .env and set a strong password, then re-run." >&2
+    exit 1
+  fi
+  if [[ "${LICENSE_MODE_NOW}" == "connected" && -z "${FLEET_TOKEN_NOW}" ]]; then
+    echo "WARNING: KNONIX_LICENSE_MODE=connected but KNONIX_LICENSE_SERVICE_TOKEN is empty."
+    echo "         Seats will not report to the Knonix fleet board until you set the token."
+  fi
+fi
+
+# Always ensure fleet URL default when connected.
+if [[ "$(read_env KNONIX_LICENSE_MODE)" == "connected" ]]; then
+  if [[ -z "$(read_env KNONIX_LICENSE_SERVICE_URL)" ]]; then
+    set_env KNONIX_LICENSE_SERVICE_URL "https://ai.knonix.com"
+  fi
+fi
+
+# Auto-generate install secrets (idempotent).
+if command -v openssl >/dev/null 2>&1; then
+  if [[ -z "$(read_env KNONIX_HEARTBEAT_SECRET)" ]]; then
+    set_env KNONIX_HEARTBEAT_SECRET "$(openssl rand -hex 32)"
+    echo "==> Generated KNONIX_HEARTBEAT_SECRET (daily seat reporting)"
+  fi
+  if [[ -z "$(read_env KNONIX_CONNECTOR_ENCRYPTION_KEY)" ]]; then
+    # 32-byte key, base64 — used to encrypt OAuth connector tokens at rest.
+    set_env KNONIX_CONNECTOR_ENCRYPTION_KEY "$(openssl rand -base64 32)"
+    echo "==> Generated KNONIX_CONNECTOR_ENCRYPTION_KEY (connector token encryption)"
+  fi
+  if [[ -z "$(read_env KNONIX_MODEL)" ]]; then
+    set_env KNONIX_MODEL "qwen2.5:7b"
+  fi
+  if [[ -z "$(read_env KNONIX_CODING_MODEL)" ]]; then
+    set_env KNONIX_CODING_MODEL "qwen2.5-coder:7b"
   fi
 fi
 
@@ -172,50 +299,7 @@ set_env_if_absent() {
   fi
 }
 
-# Interactive first-run setup (TTY only; skips keys already in .env).
-prompt_if_empty() {
-  local key="$1" prompt="$2" default="${3:-}"
-  local current
-  current="$(read_env "$key")"
-  if [[ -n "${current}" ]]; then
-    return 0
-  fi
-  if [[ ! -t 0 ]]; then
-    return 0
-  fi
-  local answer
-  if [[ -n "${default}" ]]; then
-    read -r -p "${prompt} [${default}]: " answer
-    answer="${answer:-$default}"
-  else
-    read -r -p "${prompt}: " answer
-  fi
-  if [[ -n "${answer}" ]]; then
-    set_env_if_absent "${key}" "${answer}"
-  fi
-}
-
-if [[ -t 0 ]]; then
-  echo "==> Install setup (press Enter to keep defaults where shown)"
-  prompt_if_empty POSTGRES_PASSWORD "Postgres password for this install" "$(openssl rand -base64 18 2>/dev/null || echo change-me-in-production)"
-  prompt_if_empty KNONIX_DOMAIN "Public HTTPS domain (blank = http://localhost:3000)" ""
-  if [[ -n "$(read_env KNONIX_DOMAIN)" && "$(read_env KNONIX_DOMAIN)" != "localhost" ]]; then
-    prompt_if_empty KNONIX_ACME_EMAIL "Email for Let's Encrypt expiry notices" ""
-  fi
-  prompt_if_empty ENABLE_AUTH "Enable multi-user accounts? (true/false)" "true"
-  prompt_if_empty KNONIX_LICENSE_MODE "License mode: free | connected | offline" "free"
-  if [[ "$(read_env KNONIX_LICENSE_MODE)" == "connected" ]]; then
-    prompt_if_empty KNONIX_LICENSE_KEY "License key from Knonix" ""
-    prompt_if_empty KNONIX_LICENSE_SERVICE_URL "License service URL" "https://ai.knonix.com"
-  fi
-  echo "    Connector + M365/Google OAuth: configure later in Admin → Connectors"
-  echo "    (or set KNONIX_MS_OAUTH_* / KNONIX_GOOGLE_OAUTH_* in .env before re-run)"
-fi
-
-if [[ -z "$(read_env KNONIX_CONNECTOR_ENCRYPTION_KEY)" ]] && command -v openssl >/dev/null 2>&1; then
-  set_env_if_absent KNONIX_CONNECTOR_ENCRYPTION_KEY "$(openssl rand -base64 32)"
-  echo "==> Generated KNONIX_CONNECTOR_ENCRYPTION_KEY (for M365/Google connectors)"
-fi
+# set_env is defined above (guided config); keep set_env_if_absent for auth minting.
 
 AUTH_ENABLED="$(read_env ENABLE_AUTH)"
 AUTH_ENABLED="${AUTH_ENABLED:-true}"
@@ -274,6 +358,36 @@ else
   echo "==> Auth disabled (ENABLE_AUTH=false) — single-user / anonymous mode"
 fi
 
+# Public origin for OAuth / M365 connector callbacks. The Next.js process listens
+# on 0.0.0.0:3000 inside Docker; these vars tell it the URL browsers use.
+AUTH_DOMAIN="$(read_env KNONIX_DOMAIN)"
+if [[ -n "${AUTH_DOMAIN}" && "${AUTH_DOMAIN}" != "localhost" ]]; then
+  PUBLIC_URL="https://${AUTH_DOMAIN}"
+elif [[ "${AUTH_DOMAIN}" == "localhost" ]]; then
+  PUBLIC_URL="https://localhost"
+else
+  PUBLIC_URL="http://localhost:3000"
+fi
+set_env_if_absent KNONIX_PUBLIC_URL "${PUBLIC_URL}"
+set_env_if_absent NEXT_PUBLIC_BASE_URL "${PUBLIC_URL}"
+
+# Enterprise SSO (GoTrue): reuse connector MS OAuth creds when dedicated auth
+# vars are unset, and auto-enable providers that have id + secret configured.
+MS_OAUTH_ID="$(read_env KNONIX_MS_OAUTH_CLIENT_ID)"
+MS_OAUTH_SECRET="$(read_env KNONIX_MS_OAUTH_CLIENT_SECRET)"
+if [[ -z "$(read_env KNONIX_AUTH_AZURE_CLIENT_ID)" && -n "${MS_OAUTH_ID}" ]]; then
+  set_env_if_absent KNONIX_AUTH_AZURE_CLIENT_ID "${MS_OAUTH_ID}"
+fi
+if [[ -z "$(read_env KNONIX_AUTH_AZURE_SECRET)" && -n "${MS_OAUTH_SECRET}" ]]; then
+  set_env_if_absent KNONIX_AUTH_AZURE_SECRET "${MS_OAUTH_SECRET}"
+fi
+if [[ -n "$(read_env KNONIX_AUTH_AZURE_CLIENT_ID)" && -n "$(read_env KNONIX_AUTH_AZURE_SECRET)" ]]; then
+  set_env_if_absent KNONIX_AUTH_AZURE_ENABLED "true"
+fi
+if [[ -n "$(read_env KNONIX_AUTH_GOOGLE_CLIENT_ID)" && -n "$(read_env KNONIX_AUTH_GOOGLE_SECRET)" ]]; then
+  set_env_if_absent KNONIX_AUTH_GOOGLE_ENABLED "true"
+fi
+
 # 2c. SearXNG needs a non-empty secret_key. Generate one once and persist it so
 #     the self-hosted search backend starts cleanly and serves JSON to the app.
 SEARXNG_SECRET_VAL="$(read_env SEARXNG_SECRET)"
@@ -325,18 +439,6 @@ else
   echo "    then re-run: sudo ./install.sh"
 fi
 
-# 3b. Azure data disk: keep images/models off the OS root volume.
-if mountpoint -q /mnt/knonix-data 2>/dev/null; then
-  echo "==> Data disk detected at /mnt/knonix-data — configuring Docker storage"
-  if [[ -x ./scripts/setup-data-disk.sh ]]; then
-    if [[ "$(id -u)" -eq 0 ]]; then
-      ./scripts/setup-data-disk.sh --prune-build-cache || true
-    elif command -v sudo >/dev/null 2>&1; then
-      sudo ./scripts/setup-data-disk.sh --prune-build-cache || true
-    fi
-  fi
-fi
-
 # 4. Pull the image and bring the stack up.
 TAG="$(read_env KNONIX_IMAGE_TAG)"
 TAG="${TAG:-latest}"
@@ -380,44 +482,118 @@ if [[ -n "${pg_ready}" ]]; then
   fi
 
   if [[ "${AUTH_ENABLED}" == "true" ]]; then
-    echo "==> Ensuring the auth schema exists in Postgres"
-    docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
-      psql -U "${PG_USER}" -d "${PG_DB}" -c 'CREATE SCHEMA IF NOT EXISTS auth;' \
-      >/dev/null 2>&1 \
-      && echo "    auth schema is ready." \
-      || echo "WARNING: could not create the auth schema automatically; GoTrue may create it on start."
+    echo "==> Ensuring auth schema + postgres role exist (GoTrue requirement)"
+    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      psql -U "${PG_USER}" -d "${PG_DB}" < init-auth-role.sql >/dev/null 2>&1; then
+      docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        psql -U "${PG_USER}" -d "${PG_DB}" -c 'CREATE SCHEMA IF NOT EXISTS auth;' \
+        >/dev/null 2>&1 || true
+      docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        psql -U "${PG_USER}" -d "${PG_DB}" < init-auth-types.sql >/dev/null 2>&1 || true
+      # Stale auth.schema_migrations breaks GoTrue when search_path includes auth.
+      docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        psql -U "${PG_USER}" -d "${PG_DB}" -c 'DROP TABLE IF EXISTS auth.schema_migrations;' \
+        >/dev/null 2>&1 || true
+      echo "    auth schema + postgres role are ready."
+      # If GoTrue is crash-looping on MFA enum migrations, repair automatically
+      # when no accounts exist yet (fresh install / broken migration state).
+      auth_users="$(
+        docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+          psql -U "${PG_USER}" -d "${PG_DB}" -tAc 'SELECT count(*) FROM auth.users' 2>/dev/null \
+          | tr -d '[:space:]' || echo 0
+      )"
+      if [[ "${auth_users}" == "0" ]] && docker compose "${COMPOSE_ARGS[@]}" ps supabase-auth 2>/dev/null \
+        | grep -q 'Restarting'; then
+        echo "    GoTrue unhealthy with no accounts — resetting auth migrations"
+        docker compose "${COMPOSE_ARGS[@]}" stop supabase-auth >/dev/null 2>&1 || true
+        docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+          psql -U "${PG_USER}" -d "${PG_DB}" < init-auth-reset.sql >/dev/null 2>&1 || true
+        docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+          psql -U "${PG_USER}" -d "${PG_DB}" < init-auth-role.sql >/dev/null 2>&1 || true
+        docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+          psql -U "${PG_USER}" -d "${PG_DB}" < init-auth-types.sql >/dev/null 2>&1 || true
+      fi
+      docker compose "${COMPOSE_ARGS[@]}" restart supabase-auth >/dev/null 2>&1 \
+        && echo "    Restarted supabase-auth to apply migrations." \
+        || true
+    else
+      echo "WARNING: could not bootstrap auth roles; check Postgres logs."
+    fi
   fi
 else
   echo "WARNING: Postgres did not become ready in time; skipping DB bootstrap."
 fi
 
-# 5. Pull the default sovereign models into Ollama.
-echo "==> Pulling default local models (llama3.1:8b, nemotron-mini:4b, nomic-embed-text)"
-echo "    (this can take several minutes on first run)"
-for model in llama3.1:8b nemotron-mini:4b nomic-embed-text; do
+# 5. Pull default sovereign models into Ollama (CPU-friendly defaults).
+CHAT_MODEL="$(read_env KNONIX_MODEL)"; CHAT_MODEL="${CHAT_MODEL:-qwen2.5:7b}"
+CODING_MODEL="$(read_env KNONIX_CODING_MODEL)"; CODING_MODEL="${CODING_MODEL:-qwen2.5-coder:7b}"
+echo "==> Pulling default local models (${CHAT_MODEL}, nomic-embed-text)"
+echo "    (this can take several minutes on first run; needs free disk for models)"
+for model in "${CHAT_MODEL}" nomic-embed-text; do
   docker compose "${COMPOSE_ARGS[@]}" exec -T ollama ollama pull "${model}" || \
-    echo "WARNING: failed to pull ${model} — you can pull it later from /admin."
+    echo "WARNING: failed to pull ${model} — pull later from /admin or: docker compose exec ollama ollama pull ${model}"
+done
+# Coding model is optional on small disks — pull best-effort.
+if [[ "${CODING_MODEL}" != "${CHAT_MODEL}" ]]; then
+  echo "==> Pulling coding model ${CODING_MODEL} (optional)"
+  docker compose "${COMPOSE_ARGS[@]}" exec -T ollama ollama pull "${CODING_MODEL}" || \
+    echo "WARNING: coding model not pulled — you can add it from /admin later."
+fi
+
+# 6. Wait for app health, then print a clear first-run checklist.
+if [[ -n "${KNONIX_DOMAIN}" && "${KNONIX_DOMAIN}" != "localhost" ]]; then
+  APP_URL="https://${KNONIX_DOMAIN}"
+elif [[ "${KNONIX_DOMAIN}" == "localhost" ]]; then
+  APP_URL="https://localhost"
+else
+  APP_URL="http://localhost:3000"
+fi
+
+echo "==> Waiting for app health at ${APP_URL}/api/knonix/health"
+for _ in $(seq 1 40); do
+  if curl -fsS --max-time 5 "${APP_URL}/api/knonix/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 3
 done
 
 echo
 echo "==> KnonixAI is up."
-if [[ -n "${KNONIX_DOMAIN}" ]]; then
-  echo "    App:   https://${KNONIX_DOMAIN}"
-  echo "    Admin: https://${KNONIX_DOMAIN}/admin"
+echo "    App:   ${APP_URL}"
+echo "    Admin: ${APP_URL}/admin"
+echo "    Health:${APP_URL}/api/knonix/health"
+if [[ -n "${KNONIX_DOMAIN}" && "${KNONIX_DOMAIN}" != "localhost" ]]; then
   echo
   echo "    First HTTPS request may take a few seconds while Caddy issues the"
   echo "    Let's Encrypt certificate. If it fails, confirm DNS points here and"
   echo "    ports 80+443 are open, then: docker compose ${COMPOSE_ARGS[*]} logs caddy"
-else
-  echo "    App:   http://localhost:3000"
-  echo "    Admin: http://localhost:3000/admin"
 fi
+echo
+echo "    ========== First-run checklist (required) =========="
 if [[ "${AUTH_ENABLED}" == "true" ]]; then
-  echo
-  echo "    Accounts are ENABLED. Open the app and click Sign up to create the"
-  echo "    first account (email/password works immediately — no email server"
-  echo "    needed). To add Google/Microsoft sign-in, fill in the KNONIX_AUTH_*"
-  echo "    OAuth values in .env and re-run this script."
+  echo "    1. Open ${APP_URL}/auth/sign-up"
+  echo "       Create the FIRST account with your work email — that user becomes"
+  echo "       the organization owner (Admin)."
+  echo "    2. Open ${APP_URL}/admin"
+  echo "       Confirm License shows valid / free or paid, and your chat model is active."
+  echo "    3. Open ${APP_URL}/admin/members"
+  echo "       Add colleagues (each active member = 1 billable seat)."
+else
+  echo "    1. Open ${APP_URL} (auth disabled — single shared workspace)."
 fi
+FLEET_MODE="$(read_env KNONIX_LICENSE_MODE)"; FLEET_MODE="${FLEET_MODE:-connected}"
+FLEET_TOKEN="$(read_env KNONIX_LICENSE_SERVICE_TOKEN)"
+if [[ "${FLEET_MODE}" == "connected" && -n "${FLEET_TOKEN}" ]]; then
+  echo "    4. Fleet: connected — first sign-up auto-registers this install;"
+  echo "       daily heartbeats report seat counts (no PII) to Knonix."
+elif [[ "${FLEET_MODE}" == "connected" ]]; then
+  echo "    4. Fleet: set KNONIX_LICENSE_SERVICE_TOKEN in .env (from Knonix),"
+  echo "       then: docker compose ${COMPOSE_ARGS[*]} up -d knonixai heartbeat-cron"
+else
+  echo "    4. Fleet: mode=${FLEET_MODE} (local free/offline — not reporting to Knonix)."
+fi
+echo "    5. Optional: Microsoft 365 connectors → Admin → Connectors"
+echo "    6. Verify anytime: ./scripts/verify-install.sh"
+echo "    ===================================================="
 echo
 echo "    Manage the stack with: docker compose ${COMPOSE_ARGS[*]} ps | logs | down"
