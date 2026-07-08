@@ -325,6 +325,18 @@ else
   echo "    then re-run: sudo ./install.sh"
 fi
 
+# 3b. Azure data disk: keep images/models off the OS root volume.
+if mountpoint -q /mnt/knonix-data 2>/dev/null; then
+  echo "==> Data disk detected at /mnt/knonix-data — configuring Docker storage"
+  if [[ -x ./scripts/setup-data-disk.sh ]]; then
+    if [[ "$(id -u)" -eq 0 ]]; then
+      ./scripts/setup-data-disk.sh --prune-build-cache || true
+    elif command -v sudo >/dev/null 2>&1; then
+      sudo ./scripts/setup-data-disk.sh --prune-build-cache || true
+    fi
+  fi
+fi
+
 # 4. Pull the image and bring the stack up.
 TAG="$(read_env KNONIX_IMAGE_TAG)"
 TAG="${TAG:-latest}"

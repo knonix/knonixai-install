@@ -8,6 +8,32 @@ open-weight models run inside your boundary, so your data never has to leave.
 > Registry (GHCR). You do **not** need access to the KnonixAI source code, and
 > **no token or login is required** to pull the image.
 
+## Data disk (Azure / recommended)
+
+If your VM has a second volume (e.g. **30 GB** at `/mnt/knonix-data`), KnonixAI
+should store Docker images, layer snapshots, Ollama models, and Postgres data
+there — **not** on the small OS disk.
+
+`install.sh` runs `scripts/setup-data-disk.sh` automatically when that mount
+exists. It configures:
+
+| Path | Purpose |
+| ---- | ------- |
+| `/mnt/knonix-data/docker` | Docker images + named volumes (Postgres, Ollama, …) |
+| `/mnt/knonix-data/containerd` | Container layer snapshots (this is what fills root if misconfigured) |
+
+Manual run (safe to repeat):
+
+```bash
+sudo ./scripts/setup-data-disk.sh --prune-build-cache
+```
+
+Ensure `/etc/fstab` mounts the data disk at boot (UUID example):
+
+```
+UUID=... /mnt/knonix-data ext4 defaults,nofail,discard 0 2
+```
+
 ## Prerequisites
 
 - **Docker Engine** (`docker version`)
