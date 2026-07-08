@@ -164,8 +164,11 @@ services:
       # Public URL of the auth API as seen by browsers/providers = Kong + /auth/v1.
       API_EXTERNAL_URL: ${KNONIX_AUTH_API_EXTERNAL_URL:-http://localhost:8000/auth/v1}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}?sslmode=disable
+      # search_path=auth,public: GoTrue queries unqualified table names (e.g.
+      # identities) while migration state lives in public.schema_migrations.
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}?sslmode=disable&search_path=auth,public
       GOTRUE_DB_NAMESPACE: auth
+      GOTRUE_MAILER_EXTERNAL_HOSTS: ${KNONIX_DOMAIN:-}
       # Where users land after auth; must match your app's public origin.
       GOTRUE_SITE_URL: ${KNONIX_AUTH_SITE_URL:-http://localhost:3000}
       # Comma-separated glob allow-list for post-auth redirects (OAuth callback).
