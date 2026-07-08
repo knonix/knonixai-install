@@ -27,7 +27,8 @@ name: knonixai
 services:
   knonixai:
     image: ghcr.io/knonix/knonixai:${KNONIX_IMAGE_TAG:-latest}
-    pull_policy: always
+    # "local" tags are built on this host — do not try to pull them from GHCR.
+    pull_policy: ${KNONIX_IMAGE_PULL_POLICY:-always}
     command: npx next start -H 0.0.0.0
     env_file: .env
     environment:
