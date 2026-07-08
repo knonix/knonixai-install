@@ -45,6 +45,7 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       KNONIX_CLOUD_DEPLOYMENT: 'false'
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      KNONIX_MODEL: ${KNONIX_MODEL:-llama3.1:8b}
       # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
       # In "connected" mode the install sends a privacy-preserving heartbeat to
       # your license service so seats can be metered/billed. See README.md.
