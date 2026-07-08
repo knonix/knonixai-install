@@ -59,6 +59,9 @@ services:
       # Frontier APIs are OFF by default (enabling them sends data OUTSIDE your
       # boundary — non-sovereign).
       KNONIX_ALLOW_FRONTIER: ${KNONIX_ALLOW_FRONTIER:-false}
+      KNONIX_RAG_ENABLED: ${KNONIX_RAG_ENABLED:-true}
+      KNONIX_RAG_EMBED_MODEL: ${KNONIX_RAG_EMBED_MODEL:-nomic-embed-text}
+      KNONIX_RAG_EMBED_DIM: ${KNONIX_RAG_EMBED_DIM:-768}
       LOCAL_REDIS_URL: ${LOCAL_REDIS_URL:-redis://redis:6379}
       SEARCH_API: ${SEARCH_API:-searxng}
       SEARXNG_API_URL: ${SEARXNG_API_URL:-http://searxng:8080}
@@ -96,7 +99,7 @@ services:
     #           capabilities: [gpu]
 
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-knonixai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knonixai}
@@ -108,6 +111,7 @@ services:
       # Pre-create the `auth` schema for GoTrue on first init (runs once, on an
       # empty data volume). Harmless when auth is disabled.
       - ./init-auth-db.sql:/docker-entrypoint-initdb.d/00-init-auth-db.sql:ro
+      - ./init-rag-db.sql:/docker-entrypoint-initdb.d/01-init-rag-db.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-knonixai}']
       interval: 10s

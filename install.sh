@@ -174,6 +174,11 @@ set_env_if_absent() {
 
 AUTH_ENABLED="$(read_env ENABLE_AUTH)"
 AUTH_ENABLED="${AUTH_ENABLED:-true}"
+# Persist the resolved value so the app container always starts with an
+# explicit ENABLE_AUTH. Without this, a pre-existing .env that lacks the line
+# leaves the var unset at runtime and the app falls back to anonymous mode
+# even though auth was fully provisioned below.
+set_env_if_absent ENABLE_AUTH "${AUTH_ENABLED}"
 if [[ "${AUTH_ENABLED}" == "true" ]]; then
   echo "==> Provisioning self-hosted auth (GoTrue + Kong)"
   if ! command -v openssl >/dev/null 2>&1; then
@@ -291,34 +296,42 @@ fi
 echo "==> Starting the KnonixAI stack"
 docker compose "${COMPOSE_ARGS[@]}" up -d
 
-# 4b. When auth is on, ensure the `auth` schema exists. The Postgres init
-#     script only runs on a brand-new data volume, so on installs where the DB
-#     already existed we create it here (idempotent). GoTrue then runs its own
-#     migrations into that schema on start. We wait for Postgres to report
-#     healthy first so the psql call doesn't race the container.
-if [[ "${AUTH_ENABLED}" == "true" ]]; then
-  echo "==> Ensuring the auth schema exists in Postgres"
-  PG_USER="$(read_env POSTGRES_USER)"; PG_USER="${PG_USER:-knonixai}"
-  PG_DB="$(read_env POSTGRES_DB)"; PG_DB="${PG_DB:-knonixai}"
-  schema_ready=""
-  for _ in $(seq 1 30); do
-    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
-         pg_isready -U "${PG_USER}" >/dev/null 2>&1; then
-      schema_ready=1
-      break
-    fi
-    sleep 2
-  done
-  if [[ -n "${schema_ready}" ]]; then
+# 4b. Postgres bootstrap for existing volumes. Init scripts only run on a new
+#     data volume, so on upgrades we ensure pgvector + auth schema here.
+PG_USER="$(read_env POSTGRES_USER)"; PG_USER="${PG_USER:-knonixai}"
+PG_DB="$(read_env POSTGRES_DB)"; PG_DB="${PG_DB:-knonixai}"
+pg_ready=""
+for _ in $(seq 1 30); do
+  if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+       pg_isready -U "${PG_USER}" >/dev/null 2>&1; then
+    pg_ready=1
+    break
+  fi
+  sleep 2
+done
+
+if [[ -n "${pg_ready}" ]]; then
+  RAG_ENABLED="$(read_env KNONIX_RAG_ENABLED)"
+  RAG_ENABLED="${RAG_ENABLED:-true}"
+  if [[ "${RAG_ENABLED}" == "true" ]]; then
+    echo "==> Ensuring pgvector extension is enabled (RAG / knowledge base)"
+    docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      psql -U "${PG_USER}" -d "${PG_DB}" -c 'CREATE EXTENSION IF NOT EXISTS vector;' \
+      >/dev/null 2>&1 \
+      && echo "    pgvector extension is ready." \
+      || echo "WARNING: could not enable pgvector — confirm postgres image is pgvector/pgvector:pg17."
+  fi
+
+  if [[ "${AUTH_ENABLED}" == "true" ]]; then
+    echo "==> Ensuring the auth schema exists in Postgres"
     docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
       psql -U "${PG_USER}" -d "${PG_DB}" -c 'CREATE SCHEMA IF NOT EXISTS auth;' \
       >/dev/null 2>&1 \
       && echo "    auth schema is ready." \
       || echo "WARNING: could not create the auth schema automatically; GoTrue may create it on start."
-  else
-    echo "WARNING: Postgres did not become ready in time; skipping schema check."
-    echo "         GoTrue will attempt to create the auth schema on start."
   fi
+else
+  echo "WARNING: Postgres did not become ready in time; skipping DB bootstrap."
 fi
 
 # 5. Pull the default sovereign models into Ollama.
