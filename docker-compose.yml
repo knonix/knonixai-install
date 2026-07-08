@@ -46,6 +46,8 @@ services:
       KNONIX_CLOUD_DEPLOYMENT: 'false'
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       KNONIX_MODEL: ${KNONIX_MODEL:-llama3.1:8b}
+      KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5-coder:7b}
+      KNONIX_WORKSPACES_ROOT: /var/knonix/workspaces
       # Auth UI reads these at runtime (OAuth buttons, signup confirmation copy).
       KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
       KNONIX_AUTH_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
@@ -78,6 +80,10 @@ services:
       SEARXNG_API_URL: ${SEARXNG_API_URL:-http://searxng:8080}
     ports:
       - '3000:3000'
+    volumes:
+      - knonix_workspaces:/var/knonix/workspaces
+      # Read-only host mount for "local folder" coding projects (paths under /host/…).
+      - ${KNONIX_HOST_MOUNT:-/home/knonix}:/host:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +97,7 @@ services:
   # Sovereign local LLM runtime. Models run entirely inside your boundary.
   # After the first `up`, pull the default models with:
   #   docker compose exec ollama ollama pull llama3.1:8b
+  #   docker compose exec ollama ollama pull qwen2.5-coder:7b
   #   docker compose exec ollama ollama pull nemotron-mini:4b
   #   docker compose exec ollama ollama pull nomic-embed-text
   # (or use the admin dashboard's one-click model pull at /admin).
@@ -266,3 +273,4 @@ volumes:
   redis_data:
   searxng_data:
   ollama_data:
+  knonix_workspaces:
