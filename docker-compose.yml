@@ -46,6 +46,10 @@ services:
       KNONIX_CLOUD_DEPLOYMENT: 'false'
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       KNONIX_MODEL: ${KNONIX_MODEL:-llama3.1:8b}
+      # Auth UI reads these at runtime (OAuth buttons, signup confirmation copy).
+      KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
+      KNONIX_AUTH_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
+      KNONIX_AUTH_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
       # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
       # In "connected" mode the install sends a privacy-preserving heartbeat to
       # your license service so seats can be metered/billed. See README.md.
