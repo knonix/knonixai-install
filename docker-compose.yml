@@ -50,6 +50,12 @@ services:
       KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
       KNONIX_AUTH_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
       KNONIX_AUTH_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
+      # Microsoft 365 connectors (SharePoint, OneDrive, Outlook, Teams).
+      KNONIX_CONNECTOR_ENCRYPTION_KEY: ${KNONIX_CONNECTOR_ENCRYPTION_KEY:-}
+      KNONIX_MS_OAUTH_CLIENT_ID: ${KNONIX_MS_OAUTH_CLIENT_ID:-}
+      KNONIX_MS_OAUTH_CLIENT_SECRET: ${KNONIX_MS_OAUTH_CLIENT_SECRET:-}
+      KNONIX_MS_CLOUD_ENVIRONMENT: ${KNONIX_MS_CLOUD_ENVIRONMENT:-commercial}
+      KNONIX_MS_TENANT_ID: ${KNONIX_MS_TENANT_ID:-}
       # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
       # In "connected" mode the install sends a privacy-preserving heartbeat to
       # your license service so seats can be metered/billed. See README.md.
