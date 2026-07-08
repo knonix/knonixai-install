@@ -51,6 +51,7 @@ services:
       KNONIX_WORKSPACES_ROOT: /var/knonix/workspaces
       # Auth UI reads these at runtime (OAuth buttons, signup confirmation copy).
       KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
+      KNONIX_AUTH_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
       KNONIX_AUTH_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
       KNONIX_AUTH_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
       # Microsoft 365 connectors (SharePoint, OneDrive, Outlook, Teams).
@@ -63,7 +64,7 @@ services:
       # In "connected" mode the install sends a privacy-preserving heartbeat to
       # your license service so seats can be metered/billed. See README.md.
       KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-free}
-      KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-2}
+      KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-1}
       KNONIX_LICENSE_KEY: ${KNONIX_LICENSE_KEY:-}
       KNONIX_INSTANCE_ID: ${KNONIX_INSTANCE_ID:-}
       KNONIX_LICENSE_SERVICE_URL: ${KNONIX_LICENSE_SERVICE_URL:-}

@@ -32,6 +32,17 @@
 		reverse_proxy supabase-kong:8000
 	}
 
+	# Model pulls stream for a long time — disable proxy buffering/timeouts.
+	handle /api/knonix/models/pull* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 2h
+				write_timeout 2h
+			}
+		}
+	}
+
 	# App (Next.js) — everything else routes here by default.
 	reverse_proxy knonixai:3000
 
