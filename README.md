@@ -66,9 +66,22 @@ creates the auth schema for you. Just open the app and click **Sign up** — the
 first account works immediately (no email server required).
 
 - **Add Google/Microsoft sign-in:** fill in the `KNONIX_AUTH_*` OAuth values in
-  `.env` and re-run `./install.sh`. Set each provider's redirect URL to
-  `<NEXT_PUBLIC_SUPABASE_URL>/auth/v1/callback`.
+  `.env` and re-run `./install.sh`. Set the Entra redirect URL to
+  `https://<your-domain>/supabase/auth/v1/callback`.
 - **Single-user / no login:** set `ENABLE_AUTH=false` in `.env`.
+
+### Microsoft 365 (Entra app + connectors)
+
+To let users **sign in with Microsoft** and **search SharePoint, OneDrive,
+Outlook, and Teams** from chat, register one Entra enterprise application:
+
+1. Follow **[Microsoft 365 setup](https://github.com/knonix/KnonixAI/blob/main/docs/MICROSOFT_365_SETUP.md)** (redirect URIs, Graph permissions, client secret).
+2. Set `KNONIX_AUTH_AZURE_*` and `KNONIX_MS_OAUTH_*` in `.env`, **or** paste the
+   connector client id/secret in **Admin → Connectors** on the running app.
+3. Users connect their own account under **Admin → Connectors → Connect account**.
+
+The in-app **Set up Microsoft 365** panel on the Connectors page lists the exact
+redirect URLs for your host.
 
 ### Manual pull (without the script)
 
