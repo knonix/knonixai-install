@@ -122,7 +122,7 @@ fi
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
-    echo "Created .env from .env.example — review it (set POSTGRES_PASSWORD, license, etc.)."
+    echo "Created .env from .env.example."
   else
     echo "ERROR: no .env or .env.example found in $(pwd)." >&2
     exit 1
@@ -171,6 +171,51 @@ set_env_if_absent() {
     printf '\n%s=%s\n' "$key" "$val" >> .env
   fi
 }
+
+# Interactive first-run setup (TTY only; skips keys already in .env).
+prompt_if_empty() {
+  local key="$1" prompt="$2" default="${3:-}"
+  local current
+  current="$(read_env "$key")"
+  if [[ -n "${current}" ]]; then
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    return 0
+  fi
+  local answer
+  if [[ -n "${default}" ]]; then
+    read -r -p "${prompt} [${default}]: " answer
+    answer="${answer:-$default}"
+  else
+    read -r -p "${prompt}: " answer
+  fi
+  if [[ -n "${answer}" ]]; then
+    set_env_if_absent "${key}" "${answer}"
+  fi
+}
+
+if [[ -t 0 ]]; then
+  echo "==> Install setup (press Enter to keep defaults where shown)"
+  prompt_if_empty POSTGRES_PASSWORD "Postgres password for this install" "$(openssl rand -base64 18 2>/dev/null || echo change-me-in-production)"
+  prompt_if_empty KNONIX_DOMAIN "Public HTTPS domain (blank = http://localhost:3000)" ""
+  if [[ -n "$(read_env KNONIX_DOMAIN)" && "$(read_env KNONIX_DOMAIN)" != "localhost" ]]; then
+    prompt_if_empty KNONIX_ACME_EMAIL "Email for Let's Encrypt expiry notices" ""
+  fi
+  prompt_if_empty ENABLE_AUTH "Enable multi-user accounts? (true/false)" "true"
+  prompt_if_empty KNONIX_LICENSE_MODE "License mode: free | connected | offline" "free"
+  if [[ "$(read_env KNONIX_LICENSE_MODE)" == "connected" ]]; then
+    prompt_if_empty KNONIX_LICENSE_KEY "License key from Knonix" ""
+    prompt_if_empty KNONIX_LICENSE_SERVICE_URL "License service URL" "https://ai.knonix.com"
+  fi
+  echo "    Connector + M365/Google OAuth: configure later in Admin → Connectors"
+  echo "    (or set KNONIX_MS_OAUTH_* / KNONIX_GOOGLE_OAUTH_* in .env before re-run)"
+fi
+
+if [[ -z "$(read_env KNONIX_CONNECTOR_ENCRYPTION_KEY)" ]] && command -v openssl >/dev/null 2>&1; then
+  set_env_if_absent KNONIX_CONNECTOR_ENCRYPTION_KEY "$(openssl rand -base64 32)"
+  echo "==> Generated KNONIX_CONNECTOR_ENCRYPTION_KEY (for M365/Google connectors)"
+fi
 
 AUTH_ENABLED="$(read_env ENABLE_AUTH)"
 AUTH_ENABLED="${AUTH_ENABLED:-true}"
