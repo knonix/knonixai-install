@@ -48,6 +48,7 @@ Complete feature reference for operators and end users. For install env vars, se
 - **Knowledge search** — `searchKnowledge` over uploaded library files (local RAG)
 - **File uploads** — PDF, text/markdown, CSV, JSON, images (max 15MB; extension-friendly; indexed for RAG when storage configured)
 - **Model labels** — **Local** (Ollama, sovereign) vs **Frontier** (leaves boundary) in the model picker
+- **Tools-capable models only** — Ollama tags without `tools` (e.g. **phi4:14b**, pure completion models) are **hidden** from the chat picker and rejected at request time. Research needs tool calling. Prefer **qwen2.5:7b**, **llama3.1:8b**, or **qwen2.5-coder:7b**. Check with `ollama show <model>` → Capabilities must include `tools`.
 - **Optional frontier models** — Anthropic / OpenAI / Grok / Google when
   `KNONIX_ALLOW_FRONTIER=true` (explicitly non-sovereign)
 

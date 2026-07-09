@@ -83,6 +83,7 @@ Or open: `https://your-domain/api/knonix/health`
 | Chat is slow | Normal on CPU; first answer can take longer. Use **Quick** mode for snappy replies; **Deep** is slower by design |
 | No Sources under answer | Use **Pro** or **Deep** and ask a research question so the agent runs web search |
 | Mode toggle only shows Quick | Hard-refresh the browser (Ctrl/Cmd+Shift+R) after updating the image |
+| “does not support tools” / phi4 missing | That model is chat-only. Use `qwen2.5:7b` (or any model with `tools` in `ollama show`). phi4:14b will not appear in the picker after refresh |
 | Forgot password | Use Admin/GoTrue reset or re-set via your auth provider |
 | Need help | Contact Knonix support with your install domain |
 
