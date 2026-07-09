@@ -22,6 +22,8 @@ open-weight models run inside your boundary, so your data never has to leave.
 | Capability | Description |
 |------------|-------------|
 | **Sovereign chat** | Local Ollama models by default; web search via in-stack SearXNG |
+| **Research modes** | Quick · Pro · Adaptive · Deep (clarify, multi-source, citations, follow-ups) |
+| **Sources & export** | Always-visible source strip; Markdown report download |
 | **Spaces** | Team agent boxes — each with its own personality and tools |
 | **SKILL.md** | Upload a personality file per space |
 | **Productivity hub** | Vault · MEMORY.md · skill packs · MCP registry · approve-to-write · jobs · canvas · tabular review · digests · CUI flags |
@@ -188,7 +190,14 @@ GHCR_USER=<github-user> GHCR_TOKEN=<token-from-knonix> ./install.sh
 2. **Admin** — confirm license + models at `/admin`
 3. **Members** — add seats
 4. **Connectors** (optional) — link M365 / Google
-5. **Spaces** → create a space  
+5. **Chat research modes** (composer toggle):
+   - **Quick** — fast answers  
+   - **Pro** — clarifying questions → research → citations → follow-ups  
+   - **Adaptive** — balanced multi-step research  
+   - **Deep** — multi-source report, **Sources** strip, dig-deeper follow-ups  
+   - Download icon under an answer exports Markdown (+ sources)  
+   - Model picker shows **Local** (Ollama) on sovereign installs  
+6. **Spaces** → create a space  
    - **Settings → SKILL.md** — upload personality or use template  
    - **Settings → Productivity**  
      - **Vault** — paste policies/contracts  
@@ -196,10 +205,12 @@ GHCR_USER=<github-user> GHCR_TOKEN=<token-from-knonix> ./install.sh
      - **Skill packs** — Apply “Compliance Reviewer” etc.  
      - **Approvals** — approve agent write proposals  
      - **Jobs / Canvas / Tabular / Digest / Flags** as needed  
-6. Start a **space chat** and ask a real work question  
+7. Start a **space chat** and ask a real work question  
 
 Setup progress API (signed-in): `GET /api/knonix/setup-checklist`  
-Health: `GET /api/knonix/health`
+Health: `GET /api/knonix/health`  
+
+Full product reference: **[FEATURES.md](./FEATURES.md)**
 
 ---
 

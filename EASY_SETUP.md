@@ -53,14 +53,18 @@ Sign up as the **first user** — that account becomes the organization owner.
 1. **Sign up / log in**  
 2. **Admin → Members** — invite teammates (or stay solo)  
 3. **Connectors** — link Microsoft 365 or Google (optional)  
-4. **Spaces** — create a space for a team or project  
-5. **Space → Settings → SKILL.md** — upload personality or use a skill pack  
-6. **Space → Settings → Productivity**  
+4. **Chat research modes** (composer): **Quick · Pro · Adaptive · Deep**  
+   - Pro asks clarifying questions; Deep builds multi-source reports  
+   - Watch the agent work (tools), then **Sources** + **Related** follow-ups  
+   - Download icon under answers exports a Markdown report  
+5. **Spaces** — create a space for a team or project  
+6. **Space → Settings → SKILL.md** — upload personality or use a skill pack  
+7. **Space → Settings → Productivity**  
    - **Vault** — paste important documents  
    - **Memory** — list durable facts  
    - **Skill packs** — Apply “Compliance Reviewer” or others  
    - **Approvals** — approve agent write proposals  
-7. Start a **space chat** and ask a real work question  
+8. Start a **space chat** and ask a real work question  
 
 ## Health check
 
@@ -76,7 +80,9 @@ Or open: `https://your-domain/api/knonix/health`
 |---------|-----|
 | “Docker not found” | Install Docker Desktop and open it once |
 | Site won’t load | Wait 2–3 minutes after install; models are still downloading |
-| Chat is slow | Normal on CPU; first answer can take longer |
+| Chat is slow | Normal on CPU; first answer can take longer. Use **Quick** mode for snappy replies; **Deep** is slower by design |
+| No Sources under answer | Use **Pro** or **Deep** and ask a research question so the agent runs web search |
+| Mode toggle only shows Quick | Hard-refresh the browser (Ctrl/Cmd+Shift+R) after updating the image |
 | Forgot password | Use Admin/GoTrue reset or re-set via your auth provider |
 | Need help | Contact Knonix support with your install domain |
 

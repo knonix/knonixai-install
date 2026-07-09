@@ -11,6 +11,8 @@ Complete feature reference for operators and end users. For install env vars, se
 | Area | What you get |
 |------|----------------|
 | **Chat** | Sovereign search + chat with local models (Ollama) by default |
+| **Research modes** | **Quick · Pro · Adaptive · Deep** (clarify → tools → citations → follow-ups) |
+| **Sources** | Always-visible source strip + Markdown export with links |
 | **Spaces** | Team agent boxes — each space has its own personality and tools |
 | **SKILL.md** | Per-space personality file (upload or template) |
 | **Productivity hub** | Vault, MEMORY.md, skill packs, MCP, approvals, jobs, canvas, tabular, digests |
@@ -25,13 +27,38 @@ Complete feature reference for operators and end users. For install env vars, se
 
 ## Chat & research
 
-- **Adaptive / quick search modes** — web search (SearXNG in-boundary) + page fetch
-- **Citations** — answers grounded in tool results
-- **Agent activity UI** — live status (thinking, tools, composing) without frozen spinners
+- **Search modes** (composer toggle — cookie `searchMode`):
+
+  | Mode | Cookie | Behavior |
+  |------|--------|----------|
+  | **Quick** | `quick` | Fast answers; tools when needed |
+  | **Pro** | `pro` | Clarifying questions → research → citations → **3 follow-ups** |
+  | **Adaptive** | `adaptive` | Balanced agentic research; visible tool steps + follow-ups |
+  | **Deep** | `deep` | Multi-search + fetch + long report + sources + **3 dig-deeper follow-ups** |
+
+  Keyboard: cycle modes with the configured **toggle search mode** shortcut.
+
+  Pro / Adaptive / Deep never short-circuit to one-shot local answers (tools stay on).
+  Guests on cloud deployments must sign in for Pro / Adaptive / Deep.
+
+- **Source strip** — always-visible list of cited sources under answers (clickable URLs)
+- **Export report** — download icon on message actions → Markdown + Sources section
+- **Follow-up questions** — Related buttons after answers; click to dig deeper (Pro/Deep always; Adaptive when substantive)
+- **Agent activity UI** — live status (thinking, tools, composing) so work is visible while streaming
 - **Knowledge search** — `searchKnowledge` over uploaded library files (local RAG)
-- **Conversational turns** — short prompts skip heavy tool loops for speed on CPU hosts
+- **File uploads** — PDF, text/markdown, CSV, JSON, images (max 15MB; extension-friendly; indexed for RAG when storage configured)
+- **Model labels** — **Local** (Ollama, sovereign) vs **Frontier** (leaves boundary) in the model picker
 - **Optional frontier models** — Anthropic / OpenAI / Grok / Google when
   `KNONIX_ALLOW_FRONTIER=true` (explicitly non-sovereign)
+
+### How to verify research modes
+
+1. Hard-refresh the app so the mode toggle shows **Quick · Pro · Adaptive · Deep**.
+2. Select **Pro** → ask a broad question → expect clarifiers and/or tool trail → sources strip → related follow-ups.
+3. Select **Deep** → expect multi-step activity (search/fetch/todos) → multi-section report → sources → follow-ups.
+4. Click a **Related** question → new turn continues the thread.
+5. Use the **download** icon under an answer → `.md` report with Sources.
+6. Confirm model chip shows **Local** for Ollama (default sovereign install).
 
 ---
 
