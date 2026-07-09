@@ -95,7 +95,12 @@ When it finishes:
 ```bash
 ./scripts/verify-install.sh
 curl -fsS http://localhost:3000/api/knonix/health   # or https://your-domain/...
+
+# LLM tools check (research chat requires Ollama "tools" capability)
+./scripts/verify-ollama-llms.sh --catalog
 ```
+
+**Important:** Models like **phi4:14b** only support completion — they **cannot** run search/connectors/research. Use **qwen2.5:7b** (default) or any tag where `ollama show <tag>` lists `tools`.
 
 ---
 

@@ -48,9 +48,29 @@ Complete feature reference for operators and end users. For install env vars, se
 - **Knowledge search** — `searchKnowledge` over uploaded library files (local RAG)
 - **File uploads** — PDF, text/markdown, CSV, JSON, images (max 15MB; extension-friendly; indexed for RAG when storage configured)
 - **Model labels** — **Local** (Ollama, sovereign) vs **Frontier** (leaves boundary) in the model picker
-- **Tools-capable models only** — Ollama tags without `tools` (e.g. **phi4:14b**, pure completion models) are **hidden** from the chat picker and rejected at request time. Research needs tool calling. Prefer **qwen2.5:7b**, **llama3.1:8b**, or **qwen2.5-coder:7b**. Check with `ollama show <model>` → Capabilities must include `tools`.
+- **Tools-capable models only** — Ollama tags without `tools` (e.g. **phi4:14b**, **gemma2:9b**, **olmo2:13b**) are **hidden** from the chat picker and rejected at request time. Research needs tool calling.
 - **Optional frontier models** — Anthropic / OpenAI / Grok / Google when
   `KNONIX_ALLOW_FRONTIER=true` (explicitly non-sovereign)
+
+### Local LLM tools matrix (catalog)
+
+| Tag | Tools (research chat) | Notes |
+|-----|----------------------|--------|
+| **qwen2.5:7b** | **Yes** (default) | Best general research model; verified live |
+| qwen2.5:32b | Yes | Larger GPU host |
+| qwen2.5-coder:7b | Yes | Code workspace default |
+| llama3.1:8b | Yes | Strong CPU all-rounder |
+| llama3.3:70b | Yes | Large GPU |
+| mistral:7b / mistral-nemo:12b | Yes | Fast / multilingual |
+| nemotron-mini:4b / nemotron:70b | Yes | NVIDIA family |
+| granite3.1-dense:8b | Yes | Enterprise RAG-oriented |
+| deepseek-r1:7b / :32b | Yes* | Reasoning; validate tool quality after pull |
+| **phi4:14b** | **No** | Completion only — will error if forced |
+| gemma2:9b | No | No tools badge on Ollama |
+| olmo2:13b | No | No tools badge on Ollama |
+| nomic-embed-text | Embed only | Not for chat |
+
+\* After pull always run: `ollama show <tag>` or `scripts/verify-ollama-llms.sh`.
 
 ### How to verify research modes
 
