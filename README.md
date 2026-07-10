@@ -12,8 +12,9 @@ open-weight models run inside your boundary, so your data never has to leave.
 |-----|----------|
 | **[EASY_SETUP.md](./EASY_SETUP.md)** | Non-technical install (3 steps + first-day checklist) |
 | **[FEATURES.md](./FEATURES.md)** | Full product features (Spaces, SKILL.md, productivity, connectors, …) |
+| **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | **CMMC / DFARS / NIST mapping, readiness runbook, competitive matrix** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
-| **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | CPU / RAM / disk sizing |
+| **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers for smooth production & GPU sizing** |
 
 ---
 
@@ -32,8 +33,10 @@ open-weight models run inside your boundary, so your data never has to leave.
 | **Code workspace** | GitHub / GitLab / local projects under `/code` |
 | **Admin** | License, seats, members, models, connectors, setup health |
 | **Auth** | Email sign-up; optional Entra (incl. GCC High) / Google SSO |
+| **CMMC / compliance** | Expert coaching, enclave readiness matrices, Studio readiness sweep |
 
-See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
+See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.  
+**Selling to federal / DIB?** Start with **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** (framework matrix + competitive comparison).
 
 ---
 
@@ -48,8 +51,10 @@ See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
   docker compose version
   ```
 
-- **50 GB+ free disk** for Docker data (images + models + DB). See
-  [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md).
+- **Hardware** — see **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)**  
+  - Evaluation: 4 vCPU · 16 GB RAM · **50 GB** Docker data  
+  - **Smooth team / CMMC: 16 vCPU · 64 GB RAM · 200 GB disk**  
+  - Best quality: **24 GB NVIDIA GPU**
 - **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for faster local inference
   (uncomment the `deploy` block under `ollama` in `docker-compose.yml`).
 

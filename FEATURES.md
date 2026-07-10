@@ -22,6 +22,24 @@ Complete feature reference for operators and end users. For install env vars, se
 | **Studio** | Playbooks (when enabled) |
 | **Admin** | License, seats, members, models, connectors, fleet |
 | **Auth** | Email sign-up; optional Entra (incl. GCC High) / Google SSO |
+| **CMMC / compliance** | Expert mode (CMMC, DFARS, FAR, NIST); enclave readiness; Studio playbook |
+
+**CMMC positioning & competitive matrix:** [CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)  
+**Hardware sizing:** [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)
+
+---
+
+## CMMC, DFARS, NIST & federal compliance
+
+- **Compliance intent** — CMMC / DFARS / FAR / NIST / CUI / readiness questions activate expert structured deliverables
+- **Enclave-first evidence** — knowledge → vault → SharePoint/email (when linked) → official web for baselines only
+- **Domain readiness matrix** — AC–SI with evidence-based statuses
+- **Plugin / skill pack** — *CMMC & Regulation Expert* / *CMMC & DFARS Expert*
+- **Space pipeline** — *CMMC Readiness Assessment*
+- **Studio playbook** — *CMMC Readiness Sweep*
+- **Disclaimer** — decision support; **not** a C3PAO certification
+
+Full mapping: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
 
 ---
 
