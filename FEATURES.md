@@ -36,7 +36,8 @@ Complete feature reference for operators and end users. For install env vars, se
 - **Domain readiness matrix** — AC–SI with evidence-based statuses
 - **Plugin / skill pack** — *CMMC & Regulation Expert* / *CMMC & DFARS Expert*
 - **Space pipeline** — *CMMC Readiness Assessment*
-- **Studio playbook** — *CMMC Readiness Sweep*
+- **Studio playbooks** — *CMMC Readiness Sweep*, *Draft SSP from Enclave*, *Draft POA- **Studio playbook** — *CMMC Readiness Sweep*M from Gaps*, *Security Policy Pack Starter*
+- **Document suite** — SSP, POA&M, policies, IR plan, CUI procedures, inventories, gap matrices (chat + Word/Excel)
 - **Disclaimer** — decision support; **not** a C3PAO certification
 
 Full mapping: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.

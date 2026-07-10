@@ -125,9 +125,49 @@ How KnonixAI positions against common alternatives for **regulated / DIB** buyer
 
 ---
 
+## Document generation suite (SSP, POA&M, policies, and more)
+
+KnonixAI is built to **author complete contractor documentation**, not only Q&A.
+
+### What you can draft in chat or Studio
+
+| Document | Chat example | Studio |
+|----------|--------------|--------|
+| **System Security Plan (SSP)** | “Draft our SSP for CMMC Level 2 using the vault and SharePoint.” | Op **Draft SSP** · Playbook *Draft SSP from Enclave* |
+| **POA&M** | “Write a POA&M from these gaps.” | Op **Draft POA&M** · Playbook *Draft POA&M from Gaps* |
+| **Information security policy** | “Write our corporate IS policy.” | Op **Security policy** · *Security Policy Pack Starter* |
+| **Incident response plan** | “Generate an IR plan aligned to DFARS 7012 themes.” | Op **IR plan** |
+| **CUI handling procedures** | “Draft CUI handling procedures.” | Chat (full Markdown + optional Word) |
+| **Access control / media / logging policies** | “Write an access control policy.” | Chat |
+| **Inventory & gap matrices** | “Create a control gap matrix (AC–SI).” | Chat · Excel when requested |
+| **Readiness report** | “Produce a CMMC readiness report.” | *CMMC Readiness Sweep* |
+| **Supplier flow-down checklist** | “Draft DFARS flow-down checklist for subs.” | Chat |
+| **Risk assessment / contingency** | “Write a risk assessment report.” | Chat |
+
+**How it works**
+
+1. Enclave evidence sweep (knowledge → vault → SharePoint/email).  
+2. Full structured Markdown draft in chat (copy-ready).  
+3. Optional **`createOfficeDocument`** for Word (.docx) or Excel (.xlsx).  
+4. Unknowns marked **`[TBD]`** — never fake “Implemented” without evidence.  
+5. Footer disclaimer: decision-support draft, requires org review.
+
+### Quality bar for “best for government contractors”
+
+| Requirement | KnonixAI behavior |
+|-------------|-------------------|
+| Complete drafts | Full SSP / POA&M structure — not bullet stubs |
+| Evidence-based | Grounded in *your* enclave corpus when present |
+| Interactive | Asks for missing boundary, CUI types, owners |
+| Exportable | Markdown + Office tools |
+| Program memory | Saves lasting facts via Approvals → MEMORY.md |
+| Honest scope | Not a C3PAO certificate or SPRS submission API |
+
+---
+
 ## Using KnonixAI for CMMC readiness (operator runbook)
 
-1. **Install** on hardware that meets [SYSTEM_REQUIREMENTS.md](../install/SYSTEM_REQUIREMENTS.md) (production tier recommended for teams).
+1. **Install** on hardware that meets [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) (production tier recommended for teams).
 2. Create a **Space** (e.g. “CMMC Program”) — set classification to **CUI** when appropriate.
 3. Install plugin **CMMC & Regulation Expert** (or apply skill pack **CMMC & DFARS Expert**).
 4. Ingest **SSP, policies, IR plan, training records, inventory** into Knowledge and/or Space Vault.
@@ -164,8 +204,9 @@ How KnonixAI positions against common alternatives for **regulated / DIB** buyer
 |-----|---------|
 | [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware for smooth, production inference |
 | [FEATURES.md](./FEATURES.md) | Full product feature reference |
-| [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Environment variables |
-| [EASY_SETUP.md](./EASY_SETUP.md) | Non-technical install walkthrough |
+| [MICROSOFT_365_SETUP.md](./INSTALL_SETTINGS.md) | Entra / GCC High connectors |
+| [ENTERPRISE_SSO.md](./INSTALL_SETTINGS.md) | Identity |
+| [Public installer docs](https://github.com/knonix/knonixai-install) | Customer-facing install + [CMMC_COMPLIANCE.md](https://github.com/knonix/knonixai-install/blob/main/CMMC_COMPLIANCE.md) |
 
 ---
 
