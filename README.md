@@ -152,9 +152,14 @@ Also see comments in **[.env.example](./.env.example)**.
 
 ---
 
-## HTTPS on your domain
+## HTTPS web server (automatic)
 
-In `.env`:
+`./install.sh` **auto-starts a Caddy reverse proxy** whenever `KNONIX_DOMAIN` is set.
+You do **not** install nginx/Apache separately — the installer wires HTTPS for you.
+
+### Enable production HTTPS
+
+In `.env` (or answer the domain prompt during `./install.sh`):
 
 ```bash
 KNONIX_DOMAIN=ai.example.com
@@ -165,13 +170,27 @@ KNONIX_ACME_EMAIL=admin@example.com
 ./install.sh
 ```
 
-**Requirements:** DNS A/AAAA to this host; ports **80** and **443** open.
+That will:
+
+1. Write public URLs (`KNONIX_PUBLIC_URL`, `NEXT_PUBLIC_BASE_URL`) for OAuth callbacks  
+2. Apply `docker-compose.proxy.yml` (Caddy on ports **80/443**)  
+3. Obtain and renew **Let's Encrypt** certificates automatically  
+4. Serve the app at `https://ai.example.com` (no `:3000` in the browser)
+
+**Requirements:** DNS A/AAAA for the domain → this host; ports **80** and **443** open inbound.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.proxy.yml logs caddy
+./scripts/verify-install.sh   # checks Caddy + app health
 ```
 
-Local HTTPS test: `KNONIX_DOMAIN=localhost` (internal CA, no public DNS).
+| Mode | Config | Result |
+|------|--------|--------|
+| **Local only** | `KNONIX_DOMAIN` empty | `http://localhost:3000` (no Caddy) |
+| **Local HTTPS** | `KNONIX_DOMAIN=localhost` | Caddy with internal CA |
+| **Public HTTPS** | real FQDN + ACME email | Caddy + Let's Encrypt |
+
+If you set a domain **after** the first install, re-run `./install.sh` — it re-syncs public URLs and brings Caddy up.
 
 ---
 

@@ -48,6 +48,33 @@ else
 fi
 echo
 
+echo "-- Web server (HTTPS reverse proxy) --"
+if [[ -n "${DOMAIN}" ]]; then
+  if "${DOCKER[@]}" compose ps caddy 2>/dev/null | grep -qiE 'Up|running'; then
+    echo "OK    Caddy is running for domain ${DOMAIN}"
+  else
+    echo "FAIL  KNONIX_DOMAIN=${DOMAIN} but Caddy is not running"
+    echo "      Re-run: ./install.sh   (auto-applies docker-compose.proxy.yml)"
+    echo "      Or: docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d"
+    fail=1
+  fi
+  # Ports 80/443 should be published on the host when Caddy is active
+  if command -v ss >/dev/null 2>&1; then
+    if ss -lnt 2>/dev/null | grep -qE ':(80|443)\b'; then
+      echo "OK    Host is listening on 80 and/or 443"
+    else
+      echo "WARN  Ports 80/443 not detected listening — HTTPS may fail from the internet"
+    fi
+  fi
+else
+  echo "OK    Local mode (no KNONIX_DOMAIN) — app on http://localhost:3000"
+  echo "      To enable automatic HTTPS web server, set in .env:"
+  echo "        KNONIX_DOMAIN=ai.yourcompany.com"
+  echo "        KNONIX_ACME_EMAIL=you@yourcompany.com"
+  echo "      then re-run ./install.sh"
+fi
+echo
+
 echo "-- App health --"
 health_json="$(curl -fsS --max-time 15 "${BASE}/api/knonix/health" 2>/dev/null || true)"
 if [[ -z "${health_json}" ]]; then

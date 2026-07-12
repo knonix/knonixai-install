@@ -360,6 +360,8 @@ fi
 
 # Public origin for OAuth / M365 connector callbacks. The Next.js process listens
 # on 0.0.0.0:3000 inside Docker; these vars tell it the URL browsers use.
+# Always re-sync from KNONIX_DOMAIN so flipping local → HTTPS domain updates
+# callbacks without hand-editing stale localhost URLs.
 AUTH_DOMAIN="$(read_env KNONIX_DOMAIN)"
 if [[ -n "${AUTH_DOMAIN}" && "${AUTH_DOMAIN}" != "localhost" ]]; then
   PUBLIC_URL="https://${AUTH_DOMAIN}"
@@ -368,8 +370,14 @@ elif [[ "${AUTH_DOMAIN}" == "localhost" ]]; then
 else
   PUBLIC_URL="http://localhost:3000"
 fi
-set_env_if_absent KNONIX_PUBLIC_URL "${PUBLIC_URL}"
-set_env_if_absent NEXT_PUBLIC_BASE_URL "${PUBLIC_URL}"
+set_env KNONIX_PUBLIC_URL "${PUBLIC_URL}"
+set_env NEXT_PUBLIC_BASE_URL "${PUBLIC_URL}"
+echo "==> Public origin: ${PUBLIC_URL}"
+if [[ -n "${AUTH_DOMAIN}" ]]; then
+  echo "    Web server: Caddy will auto-start (HTTPS reverse proxy + Let's Encrypt)"
+else
+  echo "    Web server: local only (http://localhost:3000). Set KNONIX_DOMAIN for HTTPS."
+fi
 
 # Enterprise SSO (GoTrue): reuse connector MS OAuth creds when dedicated auth
 # vars are unset, and auto-enable providers that have id + secret configured.
@@ -454,6 +462,29 @@ fi
 
 echo "==> Starting the KnonixAI stack"
 docker compose "${COMPOSE_ARGS[@]}" up -d
+
+# 4a. Confirm reverse proxy is up when domain mode is enabled.
+if [[ -n "${KNONIX_DOMAIN}" ]]; then
+  echo "==> Checking web server (Caddy reverse proxy)"
+  caddy_ok=""
+  for _ in $(seq 1 20); do
+    if docker compose "${COMPOSE_ARGS[@]}" ps caddy 2>/dev/null | grep -qiE 'Up|running'; then
+      caddy_ok=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ -n "${caddy_ok}" ]]; then
+    echo "    Caddy is running — HTTPS at https://${KNONIX_DOMAIN}"
+    if [[ "${KNONIX_DOMAIN}" != "localhost" ]]; then
+      echo "    First request may issue a Let's Encrypt cert (needs DNS + ports 80/443)."
+    fi
+  else
+    echo "WARNING: Caddy did not come up. HTTPS may not work yet."
+    echo "         Check: docker compose ${COMPOSE_ARGS[*]} logs caddy"
+    echo "         Confirm ${PROXY_FILE} exists and ports 80/443 are free."
+  fi
+fi
 
 # 4b. Postgres bootstrap for existing volumes. Init scripts only run on a new
 #     data volume, so on upgrades we ensure pgvector + auth schema here.
