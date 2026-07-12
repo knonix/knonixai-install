@@ -50,7 +50,20 @@ echo
 
 echo "-- Web server (HTTPS reverse proxy) --"
 if [[ -n "${DOMAIN}" ]]; then
-  if "${DOCKER[@]}" compose ps caddy 2>/dev/null | grep -qiE 'Up|running'; then
+  # Domain mode uses the proxy overlay; include it so `compose ps caddy` works.
+  COMPOSE_PS=("${DOCKER[@]}" compose -f docker-compose.yml)
+  if [[ -f docker-compose.proxy.yml ]]; then
+    COMPOSE_PS+=(-f docker-compose.proxy.yml)
+  fi
+  caddy_running=0
+  if "${COMPOSE_PS[@]}" ps caddy 2>/dev/null | grep -qiE 'Up|running'; then
+    caddy_running=1
+  elif "${DOCKER[@]}" ps --format '{{.Names}} {{.Status}}' 2>/dev/null \
+    | grep -qiE 'caddy.*(Up|running)'; then
+    # Orphan / alternate project name still counts as healthy web server
+    caddy_running=1
+  fi
+  if [[ "${caddy_running}" -eq 1 ]]; then
     echo "OK    Caddy is running for domain ${DOMAIN}"
   else
     echo "FAIL  KNONIX_DOMAIN=${DOMAIN} but Caddy is not running"
@@ -65,6 +78,12 @@ if [[ -n "${DOMAIN}" ]]; then
     else
       echo "WARN  Ports 80/443 not detected listening — HTTPS may fail from the internet"
     fi
+  fi
+  # End-to-end HTTPS health (same as users hit)
+  if curl -fsS --max-time 10 "${BASE}/api/knonix/health" >/dev/null 2>&1; then
+    echo "OK    HTTPS health responds at ${BASE}/api/knonix/health"
+  else
+    echo "WARN  ${BASE}/api/knonix/health not reachable yet (cert/DNS may still be issuing)"
   fi
 else
   echo "OK    Local mode (no KNONIX_DOMAIN) — app on http://localhost:3000"
