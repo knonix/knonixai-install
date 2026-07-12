@@ -238,3 +238,15 @@ See installer [README.md — Disk maintenance](./README.md#disk-maintenance).
 | Multi-model catalog (5+ LLMs)     | Production disk      | Production     |
 | 14B–32B local quality             | Performance GPU      | Performance    |
 | 70B / MoE open frontier           | Enterprise multi-GPU | Enterprise     |
+
+---
+
+## Moving to a larger host
+
+If this install is slow (small CPU/RAM), migrate config + Docker volumes to a
+production-tier machine:
+
+**[MIGRATION.md](./MIGRATION.md)** — `./scripts/migrate.sh export` / `import`
+
+On the new host, raise `OLLAMA_NUM_CTX` / `OLLAMA_NUM_PREDICT` only after you
+have free memory headroom (see Performance tier above).

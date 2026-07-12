@@ -16,6 +16,7 @@ open-weight models run inside your boundary, so your data never has to leave.
 | **[COMPARISON.md](./COMPARISON.md)** | **Buyers — vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor** |
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | **CMMC / DFARS / NIST mapping, readiness runbook, competitive matrix** |
 | **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers, GPU sizing, NVIDIA Jetson** |
+| **[MIGRATION.md](./MIGRATION.md)** | **Move install to a larger host (`migrate.sh`)** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
 
 ---
@@ -298,42 +299,23 @@ See [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md).
 
 ## Migrate to another machine
 
-Use **`./scripts/migrate.sh`** to move this install (config + Docker volumes) to a larger host.
-
-### On the old (source) host
+**Full guide:** **[MIGRATION.md](./MIGRATION.md)** (hardware targets, DNS cutover, platform vs customer, troubleshooting).
 
 ```bash
-cd /path/to/knonixai-install
-./scripts/migrate.sh list-volumes          # see sizes (Ollama is usually largest)
+# Old host
+./scripts/migrate.sh list-volumes
 ./scripts/migrate.sh export ~/knonix-backup
-# smaller (re-pull models on the new host):
-# ./scripts/migrate.sh export ~/knonix-backup --skip-ollama
-
 rsync -avP ~/knonix-backup/ user@NEW_HOST:/tmp/knonix-backup/
-```
 
-Export **stops** the stack for a consistent Postgres snapshot (use `--keep-running` only if you accept risk).
-
-### On the new (target) host
-
-```bash
-# Docker + compose must be installed first
-git clone https://github.com/knonix/knonixai-install.git
-cd knonixai-install
+# New host
+git clone https://github.com/knonix/knonixai-install.git && cd knonixai-install
 ./scripts/migrate.sh import /tmp/knonix-backup
-
-# Review .env — domain, image tag, and resources:
-#   OLLAMA_NUM_CTX=8192
-#   OLLAMA_NUM_PREDICT=3072
-# Platform host only: keep KNONIX_PLATFORM_MODE=cloud + PLATFORM_OWNER
-# Customer host: sovereign + PLATFORM_OWNER=false (never copy platform admin token)
-
+# review .env, then:
 docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
 ./scripts/verify-install.sh
 ```
 
-Then point DNS A/AAAA at the new machine if the domain moved. Delete the backup when cutover is confirmed (it contains secrets).
-
+Export stops the stack for a consistent Postgres snapshot. The backup includes secrets — delete it after cutover.
 ---
 
 ## OAuth redirect URIs
@@ -405,6 +387,7 @@ Details, JetPack notes, and lean env profile: **[SYSTEM_REQUIREMENTS.md § NVIDI
 | [COMPARISON.md](./COMPARISON.md) | Competitive matrix vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor |
 | [CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md) | CMMC/DFARS/NIST, SSP/POA&M, compliance competitive table |
 | [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware tiers, disk, GPU, **Jetson** |
+| [MIGRATION.md](./MIGRATION.md) | Move install to another host (`scripts/migrate.sh`) |
 | [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Full `.env` reference |
 | [.env.example](./.env.example) | Annotated config template |
 

@@ -15,6 +15,7 @@ Installs the prebuilt image from GHCR — **no source access or token required**
 | **[COMPARISON.md](./COMPARISON.md)** | Buyers | Competitive matrix vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor |
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | Compliance / capture | CMMC/DFARS/NIST mapping, SSP/POA&M suite, competitive compliance table |
 | **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | IT / ops | CPU/RAM/disk/GPU, **NVIDIA Jetson**, model sizing |
+| **[MIGRATION.md](./MIGRATION.md)** | IT / ops | Move install to a larger host (`migrate.sh`) |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Ops | Every `.env` variable |
 | **[.env.example](./.env.example)** | Ops | Annotated config template |
 
@@ -89,6 +90,20 @@ Full table: **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)**.
 | Fast local quality | 24 GB+ NVIDIA dGPU |
 
 **Can an NVIDIA Jetson run this?** Yes — Orin NX 16 GB+ / AGX Orin recommended. Orin Nano 8 GB is demo-only. Full matrix: **[SYSTEM_REQUIREMENTS.md § NVIDIA Jetson](./SYSTEM_REQUIREMENTS.md#nvidia-jetson--can-it-run-knonixai)**.
+
+---
+
+## Moving to a bigger server
+
+Full steps: **[MIGRATION.md](./MIGRATION.md)**.
+
+```bash
+# Old host
+./scripts/migrate.sh export ~/knonix-backup
+# New host
+./scripts/migrate.sh import /path/to/knonix-backup
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+```
 
 ---
 
