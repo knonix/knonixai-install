@@ -296,6 +296,46 @@ See [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md).
 
 ---
 
+## Migrate to another machine
+
+Use **`./scripts/migrate.sh`** to move this install (config + Docker volumes) to a larger host.
+
+### On the old (source) host
+
+```bash
+cd /path/to/knonixai-install
+./scripts/migrate.sh list-volumes          # see sizes (Ollama is usually largest)
+./scripts/migrate.sh export ~/knonix-backup
+# smaller (re-pull models on the new host):
+# ./scripts/migrate.sh export ~/knonix-backup --skip-ollama
+
+rsync -avP ~/knonix-backup/ user@NEW_HOST:/tmp/knonix-backup/
+```
+
+Export **stops** the stack for a consistent Postgres snapshot (use `--keep-running` only if you accept risk).
+
+### On the new (target) host
+
+```bash
+# Docker + compose must be installed first
+git clone https://github.com/knonix/knonixai-install.git
+cd knonixai-install
+./scripts/migrate.sh import /tmp/knonix-backup
+
+# Review .env — domain, image tag, and resources:
+#   OLLAMA_NUM_CTX=8192
+#   OLLAMA_NUM_PREDICT=3072
+# Platform host only: keep KNONIX_PLATFORM_MODE=cloud + PLATFORM_OWNER
+# Customer host: sovereign + PLATFORM_OWNER=false (never copy platform admin token)
+
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+./scripts/verify-install.sh
+```
+
+Then point DNS A/AAAA at the new machine if the domain moved. Delete the backup when cutover is confirmed (it contains secrets).
+
+---
+
 ## OAuth redirect URIs
 
 When `KNONIX_DOMAIN` is set, the installer configures public URLs for callbacks.
