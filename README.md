@@ -10,11 +10,13 @@ open-weight models run inside your boundary, so your data never has to leave.
 
 | Doc | Audience |
 |-----|----------|
+| **[GETTING_STARTED.md](./GETTING_STARTED.md)** | New users — doc map, first hour, day-1 prompts |
 | **[EASY_SETUP.md](./EASY_SETUP.md)** | Non-technical install (3 steps + first-day checklist) |
 | **[FEATURES.md](./FEATURES.md)** | Full product features (Spaces, SKILL.md, productivity, connectors, …) |
+| **[COMPARISON.md](./COMPARISON.md)** | **Buyers — vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor** |
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | **CMMC / DFARS / NIST mapping, readiness runbook, competitive matrix** |
+| **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers, GPU sizing, NVIDIA Jetson** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
-| **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers for smooth production & GPU sizing** |
 
 ---
 
@@ -54,9 +56,10 @@ See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
 - **Hardware** — see **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)**  
   - Evaluation: 4 vCPU · 16 GB RAM · **50 GB** Docker data  
   - **Smooth team / CMMC: 16 vCPU · 64 GB RAM · 200 GB disk**  
-  - Best quality: **24 GB NVIDIA GPU**
+  - Best quality: **24 GB NVIDIA GPU**  
+  - **Edge / Jetson:** Orin NX **16 GB+** or AGX Orin (NVMe) — Orin Nano 8 GB is demo-only  
 - **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for faster local inference
-  (uncomment the `deploy` block under `ollama` in `docker-compose.yml`).
+  (uncomment the `deploy` block under `ollama` in `docker-compose.yml`). ARM64 / Jetson images: pull `linux/arm64` tags.
 
 ---
 
@@ -105,7 +108,7 @@ curl -fsS http://localhost:3000/api/knonix/health   # or https://your-domain/...
 ./scripts/verify-ollama-llms.sh --catalog
 ```
 
-**Important:** Models like **phi4:14b** only support completion — they **cannot** run search/connectors/research. Use **qwen2.5:7b** (default) or any tag where `ollama show <tag>` lists `tools`.
+**Important:** Models like **phi4:14b** only support completion — they **cannot** run search/connectors/research. Use **qwen3:8b** (default) or any tag where `ollama show <tag>` lists `tools`.
 
 ---
 
@@ -122,7 +125,7 @@ Copy `.env.example` → `.env`, or let `./install.sh` create it.
 | `KNONIX_DOMAIN` | Prod HTTPS | Public hostname |
 | `KNONIX_ACME_EMAIL` | With domain | Let’s Encrypt notices |
 | `KNONIX_IMAGE_TAG` | Prod | Pin release (`v1.x.x`) instead of `latest` |
-| `KNONIX_MODEL` | Optional | Default chat model (`qwen2.5:7b`) |
+| `KNONIX_MODEL` | Optional | Default chat model (`qwen3:8b` tools-capable) |
 | `KNONIX_CODING_MODEL` | Optional | Coding model (`qwen2.5-coder:7b`) |
 | `OLLAMA_NUM_CTX` | Optional | Context size (default tuned for CPU hosts) |
 | `KNONIX_FREE_SEATS` | Optional | Free seats per install (default `1`) |
@@ -180,7 +183,7 @@ cd knonixai-install
 cp .env.example .env
 # Edit: POSTGRES_PASSWORD, optional domain + fleet token, KNONIX_IMAGE_TAG
 docker compose up -d
-docker compose exec ollama ollama pull qwen2.5:7b
+docker compose exec ollama ollama pull qwen3:8b
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
@@ -304,17 +307,49 @@ docker compose pull && docker compose up -d
 
 ---
 
+## How KnonixAI compares (summary)
+
+| Capability | **KnonixAI** | Cloud assistants (Copilot / ChatGPT / Claude) |
+|------------|--------------|-----------------------------------------------|
+| **Default inference** | Local open-weight (Ollama) in **your** enclave | Vendor cloud |
+| **Data sovereignty** | Yes by default | Tenant / third-party cloud |
+| **CMMC / 800-171 readiness** | Built-in expert + domain matrix + SSP/POA&M drafts | Generic chat |
+| **Air-gap / offline license** | Yes | No |
+| **GCC High Graph** | Yes (`.us` routing) | Copilot only (M365-native) |
+
+Full matrix (Glean, Perplexity, OpenClaw, Cursor, speed tradeoffs): **[COMPARISON.md](./COMPARISON.md)**.  
+Compliance positioning: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
+
+---
+
+## NVIDIA Jetson
+
+**Yes — Jetson Orin can run KnonixAI** (Docker + ARM64 + Ollama GPU path).
+
+| Device | Verdict |
+|--------|---------|
+| **Orin NX 16 GB+ / AGX Orin 32–64 GB** | Recommended edge platform |
+| **Orin Nano 8 GB** | Demo / single-user only (lean compose) |
+| **Older Xavier / Nano / TX2** | Not recommended for full stack |
+
+Details, JetPack notes, and lean env profile: **[SYSTEM_REQUIREMENTS.md § NVIDIA Jetson](./SYSTEM_REQUIREMENTS.md#nvidia-jetson--can-it-run-knonixai)**.
+
+---
+
 ## Documentation index
 
 | File | Contents |
 |------|----------|
+| [GETTING_STARTED.md](./GETTING_STARTED.md) | Doc map, first hour, day-1 prompts, hardware glance |
 | [EASY_SETUP.md](./EASY_SETUP.md) | Non-technical 3-step install |
 | [FEATURES.md](./FEATURES.md) | Product features (Spaces, productivity, connectors, admin) |
+| [COMPARISON.md](./COMPARISON.md) | Competitive matrix vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor |
+| [CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md) | CMMC/DFARS/NIST, SSP/POA&M, compliance competitive table |
+| [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware tiers, disk, GPU, **Jetson** |
 | [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Full `.env` reference |
-| [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware sizing |
 | [.env.example](./.env.example) | Annotated config template |
 
-Source product docs (developers): [knonix/KnonixAI](https://github.com/knonix/KnonixAI) → `docs/`
+Source product docs (developers with private access): [knonix/KnonixAI](https://github.com/knonix/KnonixAI) → `docs/`
 
 ---
 

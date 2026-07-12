@@ -32,6 +32,16 @@
 		reverse_proxy supabase-kong:8000
 	}
 
+	# Central License Service (fleet metering + billing). Customer installs
+	# call these endpoints; the Next.js app never handles /v1/* itself.
+	handle /v1/* {
+		reverse_proxy license-service:8787
+	}
+
+	handle /healthz {
+		reverse_proxy license-service:8787
+	}
+
 	# Model pulls stream for a long time — disable proxy buffering/timeouts.
 	handle /api/knonix/models/pull* {
 		reverse_proxy knonixai:3000 {
@@ -43,8 +53,37 @@
 		}
 	}
 
+	# Chat / coding SSE streams — flush immediately so clients see tokens/tools
+	# and do not surface a generic "network error" while the local model works.
+	handle /api/chat* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+	handle /api/coding* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+
 	# App (Next.js) — everything else routes here by default.
-	reverse_proxy knonixai:3000
+	reverse_proxy knonixai:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
 
 	# The admin dashboard is served by the app at /admin, so it is reachable
 	# at https://{$KNONIX_DOMAIN}/admin with no port number.

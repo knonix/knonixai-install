@@ -27,6 +27,8 @@ services:
       - caddy_config:/config
     depends_on:
       - knonixai
+      # license-service is only on the Knonix cloud host (fleet board). Customer
+      # installs call https://ai.knonix.com for licensing — do not depend on it here.
 
   # When fronted by Caddy, the app should not publish port 3000 on the host.
   # Caddy reaches it over the internal Docker network by service name.

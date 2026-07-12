@@ -1,31 +1,32 @@
 # KnonixAI product features
 
 Complete feature reference for operators and end users. For install env vars, see
-[CONFIGURATION.md](./INSTALL_SETTINGS.md) and the public installer README
-([knonix/knonixai-install](https://github.com/knonix/knonixai-install)).
+**[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** and the **[README](./README.md)**.
 
 ---
 
 ## At a glance
 
-| Area | What you get |
-|------|----------------|
-| **Chat** | Sovereign search + chat with local models (Ollama) by default |
-| **Research modes** | **Quick · Pro · Adaptive · Deep** (clarify → tools → citations → follow-ups) |
-| **Sources** | Always-visible source strip + Markdown export with links |
-| **Spaces** | Team agent boxes — each space has its own personality and tools |
-| **SKILL.md** | Per-space personality file (upload or template) |
-| **Productivity hub** | Vault, MEMORY.md, skill packs, MCP, approvals, jobs, canvas, tabular, digests |
-| **Connectors** | Microsoft 365 + Google (read/search; approve-to-write for durable actions) |
-| **Knowledge / RAG** | Local embeddings (pgvector) — documents stay on your install |
-| **Code** | `/code` workspace with GitHub / GitLab / local paths |
-| **Studio** | Playbooks (when enabled) |
-| **Admin** | License, seats, members, models, connectors, fleet |
-| **Auth** | Email sign-up; optional Entra (incl. GCC High) / Google SSO |
-| **CMMC / compliance** | Expert mode (CMMC, DFARS, FAR, NIST); enclave readiness; Studio playbook |
+| Area                  | What you get                                                                  |
+| --------------------- | ----------------------------------------------------------------------------- |
+| **Chat**              | Sovereign search + chat with local models (Ollama) by default                 |
+| **Research modes**    | **Quick · Pro · Adaptive · Deep** (clarify → tools → citations → follow-ups)  |
+| **Sources**           | Always-visible source strip + Markdown export with links                      |
+| **Spaces**            | Team agent boxes — each space has its own personality and tools               |
+| **SKILL.md**          | Per-space personality file (upload or template)                               |
+| **Productivity hub**  | Vault, MEMORY.md, skill packs, MCP, approvals, jobs, canvas, tabular, digests |
+| **Connectors**        | Microsoft 365 + Google (read/search; approve-to-write for durable actions)    |
+| **Knowledge / RAG**   | Local embeddings (pgvector) — documents stay on your install                  |
+| **Code**              | `/code` workspace with GitHub / GitLab / local paths                          |
+| **Studio**            | Playbooks (when enabled)                                                      |
+| **Admin**             | License, seats, members, models, connectors, fleet                            |
+| **Auth**              | Email sign-up; optional Entra (incl. GCC High) / Google SSO                   |
+| **CMMC / compliance** | Expert mode (CMMC, DFARS, FAR, NIST); enclave readiness; Studio playbook      |
 
 **CMMC positioning & competitive matrix:** [CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)  
-**Hardware sizing:** [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)
+**Product comparisons:** [COMPARISON.md](./COMPARISON.md)  
+**Hardware / Jetson sizing:** [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)  
+**Getting started:** [GETTING_STARTED.md](./GETTING_STARTED.md)
 
 ---
 
@@ -33,14 +34,15 @@ Complete feature reference for operators and end users. For install env vars, se
 
 - **Compliance intent** — CMMC / DFARS / FAR / NIST / CUI / readiness questions activate expert structured deliverables
 - **Enclave-first evidence** — knowledge → vault → SharePoint/email (when linked) → official web for baselines only
-- **Domain readiness matrix** — AC–SI with evidence-based statuses
-- **Plugin / skill pack** — *CMMC & Regulation Expert* / *CMMC & DFARS Expert*
-- **Space pipeline** — *CMMC Readiness Assessment*
-- **Studio playbooks** — *CMMC Readiness Sweep*, *Draft SSP from Enclave*, *Draft POA- **Studio playbook** — *CMMC Readiness Sweep*M from Gaps*, *Security Policy Pack Starter*
-- **Document suite** — SSP, POA&M, policies, IR plan, CUI procedures, inventories, gap matrices (chat + Word/Excel)
-- **Disclaimer** — decision support; **not** a C3PAO certification
+- **Domain readiness matrix** — AC–SI with evidence-based statuses (Implemented / Partial / Unknown / …)
+- **Plugin / skill pack** — _CMMC & Regulation Expert_ / _CMMC & DFARS Expert_
+- **Space pipeline** — _CMMC Readiness Assessment_
+- **Studio playbooks** — _CMMC Readiness Sweep_, _Draft SSP from Enclave_, _Draft POA&M from Gaps_, _Security Policy Pack Starter_
+- **Document suite** — SSP, POA&M, IS/AC/MP policies, IR plan, CUI procedures, inventories, gap matrices, readiness reports, flow-down checklists (chat Markdown + Word/Excel)
+- **Studio transform ops** — `draft_ssp`, `draft_poam`, `draft_security_policy`, `draft_ir_plan`
+- **Disclaimer** — decision support for programs; **not** a C3PAO certification
 
-Full mapping: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
+Full framework mapping, document catalog, and competitive tables: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
 
 ---
 
@@ -48,12 +50,12 @@ Full mapping: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
 
 - **Search modes** (composer toggle — cookie `searchMode`):
 
-  | Mode | Cookie | Behavior |
-  |------|--------|----------|
-  | **Quick** | `quick` | Fast answers; tools when needed |
-  | **Pro** | `pro` | Clarifying questions → research → citations → **3 follow-ups** |
-  | **Adaptive** | `adaptive` | Balanced agentic research; visible tool steps + follow-ups |
-  | **Deep** | `deep` | Multi-search + fetch + long report + sources + **3 dig-deeper follow-ups** |
+  | Mode         | Cookie     | Behavior                                                                   |
+  | ------------ | ---------- | -------------------------------------------------------------------------- |
+  | **Quick**    | `quick`    | Fast answers; tools when needed                                            |
+  | **Pro**      | `pro`      | Clarifying questions → research → citations → **3 follow-ups**             |
+  | **Adaptive** | `adaptive` | Balanced agentic research; visible tool steps + follow-ups                 |
+  | **Deep**     | `deep`     | Multi-search + fetch + long report + sources + **3 dig-deeper follow-ups** |
 
   Keyboard: cycle modes with the configured **toggle search mode** shortcut.
 
@@ -73,21 +75,21 @@ Full mapping: **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)**.
 
 ### Local LLM tools matrix (catalog)
 
-| Tag | Tools (research chat) | Notes |
-|-----|----------------------|--------|
-| **qwen2.5:7b** | **Yes** (default) | Best general research model; verified live |
-| qwen2.5:32b | Yes | Larger GPU host |
-| qwen2.5-coder:7b | Yes | Code workspace default |
-| llama3.1:8b | Yes | Strong CPU all-rounder |
-| llama3.3:70b | Yes | Large GPU |
-| mistral:7b / mistral-nemo:12b | Yes | Fast / multilingual |
-| nemotron-mini:4b / nemotron:70b | Yes | NVIDIA family |
-| granite3.1-dense:8b | Yes | Enterprise RAG-oriented |
-| deepseek-r1:7b / :32b | Yes* | Reasoning; validate tool quality after pull |
-| **phi4:14b** | **No** | Completion only — will error if forced |
-| gemma2:9b | No | No tools badge on Ollama |
-| olmo2:13b | No | No tools badge on Ollama |
-| nomic-embed-text | Embed only | Not for chat |
+| Tag                             | Tools (research chat) | Notes                                       |
+| ------------------------------- | --------------------- | ------------------------------------------- |
+| **qwen2.5:7b**                  | **Yes** (default)     | Best general research model; verified live  |
+| qwen2.5:32b                     | Yes                   | Larger GPU host                             |
+| qwen2.5-coder:7b                | Yes                   | Code workspace default                      |
+| llama3.1:8b                     | Yes                   | Strong CPU all-rounder                      |
+| llama3.3:70b                    | Yes                   | Large GPU                                   |
+| mistral:7b / mistral-nemo:12b   | Yes                   | Fast / multilingual                         |
+| nemotron-mini:4b / nemotron:70b | Yes                   | NVIDIA family                               |
+| granite3.1-dense:8b             | Yes                   | Enterprise RAG-oriented                     |
+| deepseek-r1:7b / :32b           | Yes\*                 | Reasoning; validate tool quality after pull |
+| **phi4:14b**                    | **No**                | Completion only — will error if forced      |
+| gemma2:9b                       | No                    | No tools badge on Ollama                    |
+| olmo2:13b                       | No                    | No tools badge on Ollama                    |
+| nomic-embed-text                | Embed only            | Not for chat                                |
 
 \* After pull always run: `ollama show <tag>` or `scripts/verify-ollama-llms.sh`.
 
@@ -108,14 +110,14 @@ Each **Space** is an isolated work context for a team or mission.
 
 ### Settings tabs
 
-| Tab | Purpose |
-|-----|---------|
-| **Overview** | Name, description, runtime summary |
-| **SKILL.md** | Upload or edit space personality (YAML frontmatter + markdown body) |
+| Tab              | Purpose                                                                           |
+| ---------------- | --------------------------------------------------------------------------------- |
+| **Overview**     | Name, description, runtime summary                                                |
+| **SKILL.md**     | Upload or edit space personality (YAML frontmatter + markdown body)               |
 | **Productivity** | Vault, memory, skill packs, MCP, approvals, jobs, canvas, tabular, digests, flags |
-| **Instructions** | Governance / compliance rules injected every turn |
-| **Workers** | Orchestrator workers (knowledge, tenant, web, …) and tool hints |
-| **Pipelines** | Multi-stage governed workflows the supervisor can run |
+| **Instructions** | Governance / compliance rules injected every turn                                 |
+| **Workers**      | Orchestrator workers (knowledge, tenant, web, …) and tool hints                   |
+| **Pipelines**    | Multi-stage governed workflows the supervisor can run                             |
 
 ### Personality (SKILL.md)
 
@@ -152,12 +154,12 @@ Supervisor + specialized workers (Intel OPEA–style / Dell pipeline model):
 
 Built-in packs (org library, one-click **Apply** → copies into SKILL.md):
 
-| Pack | Use |
-|------|-----|
-| Compliance Reviewer | CUI-aware, cite sources, formal tone |
-| Weekly Status Writer | Executive status structure |
-| Incident Postmortem | Blameless timeline + actions |
-| Contract Analyst | Parties, terms, risks |
+| Pack                 | Use                                  |
+| -------------------- | ------------------------------------ |
+| Compliance Reviewer  | CUI-aware, cite sources, formal tone |
+| Weekly Status Writer | Executive status structure           |
+| Incident Postmortem  | Blameless timeline + actions         |
+| Contract Analyst     | Parties, terms, risks                |
 
 Admins can create additional org skill packs via API.
 
@@ -199,25 +201,25 @@ Admins can create additional org skill packs via API.
 
 ### Classification & routing flags
 
-| Flag | Values / effect |
-|------|------------------|
-| **Classification** | `public` · `internal` · `cui` — steers tool guidance and caution language |
-| **Digest enabled** | Opt into proactive digest behavior |
-| **Adaptive routing** | Prefer fast routing / stronger synthesis when models allow |
+| Flag                 | Values / effect                                                           |
+| -------------------- | ------------------------------------------------------------------------- |
+| **Classification**   | `public` · `internal` · `cui` — steers tool guidance and caution language |
+| **Digest enabled**   | Opt into proactive digest behavior                                        |
+| **Adaptive routing** | Prefer fast routing / stronger synthesis when models allow                |
 
 ---
 
 ## Connectors
 
-| Provider | Capabilities (typical) |
-|----------|------------------------|
+| Provider          | Capabilities (typical)                                               |
+| ----------------- | -------------------------------------------------------------------- |
 | **Microsoft 365** | Email, OneDrive, SharePoint, Teams, calendar, contacts (search/read) |
-| **Google** | Gmail, Drive, calendar (search/read) |
+| **Google**        | Gmail, Drive, calendar (search/read)                                 |
 
 - Admin enables provider + OAuth client under **Admin → Connectors**
 - Each user completes their own OAuth (delegated permissions)
 - GCC / GCC High / commercial routing via install cloud environment
-- See [MICROSOFT_365_SETUP.md](https://github.com/knonix/KnonixAI/blob/main/docs/MICROSOFT_365_SETUP.md)
+- See [MICROSOFT_365_SETUP.md](./MICROSOFT_365_SETUP.md)
 
 ---
 
@@ -247,14 +249,14 @@ Admins can create additional org skill packs via API.
 
 ## Admin & platform
 
-| Area | Features |
-|------|----------|
+| Area                | Features                                                      |
+| ------------------- | ------------------------------------------------------------- |
 | **License & seats** | Free seats + paid expansion; connected / offline / free modes |
-| **Members** | Roster, roles, seat consumption |
-| **Models** | Pull/list Ollama models; set active defaults |
-| **Connectors** | Org policy + OAuth client configuration |
-| **Fleet** | Heartbeat seat reporting (no PII) |
-| **Setup checklist** | `GET /api/knonix/setup-checklist` — guided day-1 progress |
+| **Members**         | Roster, roles, seat consumption                               |
+| **Models**          | Pull/list Ollama models; set active defaults                  |
+| **Connectors**      | Org policy + OAuth client configuration                       |
+| **Fleet**           | Heartbeat seat reporting (no PII)                             |
+| **Setup checklist** | `GET /api/knonix/setup-checklist` — guided day-1 progress     |
 
 ---
 
@@ -263,29 +265,29 @@ Admins can create additional org skill packs via API.
 - Email/password sign-up (first user = org owner)
 - Optional **Microsoft Entra** (commercial / GCC / GCC High) and **Google**
 - Admin-chosen member roster (not whole-directory by default)
-- See [ENTERPRISE_SSO.md](https://github.com/knonix/KnonixAI/blob/main/docs/ENTERPRISE_SSO.md)
+- See [ENTERPRISE_SSO.md](./ENTERPRISE_SSO.md)
 
 ---
 
 ## APIs (selected)
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/knonix/health` | Runtime health + setup steps |
-| `GET /api/knonix/setup-checklist` | Guided install checklist (authenticated) |
-| `GET /api/knonix/license` | Seats, mode, limits |
-| `GET /api/knonix/models` | Model catalog |
-| `GET/PATCH /api/knonix/spaces/:id` | Space config (incl. SKILL.md) |
-| `GET/POST /api/knonix/spaces/:id/productivity` | Full productivity hub |
+| Endpoint                                       | Description                              |
+| ---------------------------------------------- | ---------------------------------------- |
+| `GET /api/knonix/health`                       | Runtime health + setup steps             |
+| `GET /api/knonix/setup-checklist`              | Guided install checklist (authenticated) |
+| `GET /api/knonix/license`                      | Seats, mode, limits                      |
+| `GET /api/knonix/models`                       | Model catalog                            |
+| `GET/PATCH /api/knonix/spaces/:id`             | Space config (incl. SKILL.md)            |
+| `GET/POST /api/knonix/spaces/:id/productivity` | Full productivity hub                    |
 
 ---
 
 ## Sovereignty summary
 
-| Path | Leaves boundary? |
-|------|------------------|
-| Local Ollama chat / embeddings | No |
-| SearXNG search | Depends on SearXNG engines (self-hosted container) |
-| M365 / Google connectors | Calls Microsoft/Google as the signed-in user |
-| Frontier APIs | **Yes** — off by default |
-| Fleet heartbeat | Opaque install hash, seat count, version only — no documents/PII |
+| Path                           | Leaves boundary?                                                 |
+| ------------------------------ | ---------------------------------------------------------------- |
+| Local Ollama chat / embeddings | No                                                               |
+| SearXNG search                 | Depends on SearXNG engines (self-hosted container)               |
+| M365 / Google connectors       | Calls Microsoft/Google as the signed-in user                     |
+| Frontier APIs                  | **Yes** — off by default                                         |
+| Fleet heartbeat                | Opaque install hash, seat count, version only — no documents/PII |

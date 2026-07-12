@@ -35,7 +35,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
       DATABASE_RESTRICTED_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
       DATABASE_SSL_DISABLED: 'true'
-      ENABLE_AUTH: ${ENABLE_AUTH:-false}
+      ENABLE_AUTH: ${ENABLE_AUTH:-true}
       ANONYMOUS_USER_ID: ${ANONYMOUS_USER_ID:-docker-anonymous}
       # Self-hosted Supabase Auth (only used when ENABLE_AUTH=true). The URL
       # points at the in-boundary Kong gateway below; the keys are the anon /
@@ -45,10 +45,23 @@ services:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       KNONIX_CLOUD_DEPLOYMENT: 'false'
+      # Browser-facing origin (OAuth / connector callbacks). App binds 0.0.0.0:3000.
+      KNONIX_DOMAIN: ${KNONIX_DOMAIN:-}
+      KNONIX_PUBLIC_URL: ${KNONIX_PUBLIC_URL:-}
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
+      KNONIX_AUTH_SITE_URL: ${KNONIX_AUTH_SITE_URL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      KNONIX_MODEL: ${KNONIX_MODEL:-llama3.1:8b}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-1024}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
+      KNONIX_MODEL: ${KNONIX_MODEL:-qwen3:8b}
       KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5-coder:7b}
       KNONIX_WORKSPACES_ROOT: /var/knonix/workspaces
+      # Optional install-wide PATs for Code workspace private clones
+      KNONIX_GITHUB_TOKEN: ${KNONIX_GITHUB_TOKEN:-}
+      KNONIX_GITLAB_TOKEN: ${KNONIX_GITLAB_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-${KNONIX_GITHUB_TOKEN:-}}
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-${KNONIX_GITLAB_TOKEN:-}}
       # Auth UI reads these at runtime (OAuth buttons, signup confirmation copy).
       KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
       KNONIX_AUTH_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
@@ -60,17 +73,21 @@ services:
       KNONIX_MS_OAUTH_CLIENT_SECRET: ${KNONIX_MS_OAUTH_CLIENT_SECRET:-}
       KNONIX_MS_CLOUD_ENVIRONMENT: ${KNONIX_MS_CLOUD_ENVIRONMENT:-commercial}
       KNONIX_MS_TENANT_ID: ${KNONIX_MS_TENANT_ID:-}
-      # Licensing / seats. Free tier = KNONIX_FREE_SEATS active seats.
-      # In "connected" mode the install sends a privacy-preserving heartbeat to
-      # your license service so seats can be metered/billed. See README.md.
-      KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-free}
+      # Licensing / seats. Free tier = 1 user (KNONIX_FREE_SEATS). Extra users are paid.
+      # Connected mode heartbeats to the Knonix License Service so seats are
+      # metered. Install.sh defaults these for fleet enrollment — see README.
+      # KNONIX_PLATFORM_OWNER=true only on the Knonix-operated host (unlimited seats).
+      KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-connected}
       KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-1}
+      KNONIX_PLATFORM_OWNER: ${KNONIX_PLATFORM_OWNER:-false}
       KNONIX_LICENSE_KEY: ${KNONIX_LICENSE_KEY:-}
       KNONIX_INSTANCE_ID: ${KNONIX_INSTANCE_ID:-}
-      KNONIX_LICENSE_SERVICE_URL: ${KNONIX_LICENSE_SERVICE_URL:-}
+      KNONIX_LICENSE_SERVICE_URL: ${KNONIX_LICENSE_SERVICE_URL:-https://ai.knonix.com}
       KNONIX_LICENSE_SERVICE_TOKEN: ${KNONIX_LICENSE_SERVICE_TOKEN:-}
       KNONIX_LICENSE_TOKEN: ${KNONIX_LICENSE_TOKEN:-}
       KNONIX_LICENSE_PUBLIC_KEY: ${KNONIX_LICENSE_PUBLIC_KEY:-}
+      # Shared secret for POST /api/knonix/heartbeat (used by heartbeat-cron).
+      KNONIX_HEARTBEAT_SECRET: ${KNONIX_HEARTBEAT_SECRET:-}
       # Frontier APIs are OFF by default (enabling them sends data OUTSIDE your
       # boundary — non-sovereign).
       KNONIX_ALLOW_FRONTIER: ${KNONIX_ALLOW_FRONTIER:-false}
@@ -98,9 +115,7 @@ services:
 
   # Sovereign local LLM runtime. Models run entirely inside your boundary.
   # After the first `up`, pull the default models with:
-  #   docker compose exec ollama ollama pull llama3.1:8b
-  #   docker compose exec ollama ollama pull qwen2.5-coder:7b
-  #   docker compose exec ollama ollama pull nemotron-mini:4b
+  #   docker compose exec ollama ollama pull qwen3:8b
   #   docker compose exec ollama ollama pull nomic-embed-text
   # (or use the admin dashboard's one-click model pull at /admin).
   ollama:
@@ -222,8 +237,10 @@ services:
       GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${KNONIX_AUTH_GOOGLE_CLIENT_ID:-}
       GOTRUE_EXTERNAL_GOOGLE_SECRET: ${KNONIX_AUTH_GOOGLE_SECRET:-}
       GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${KNONIX_AUTH_API_EXTERNAL_URL:-http://localhost:8000/auth/v1}/callback
-      # Microsoft / Entra sign-in. Set AZURE_URL to your tenant authority to
-      # restrict to a single tenant (defaults to the multi-tenant 'common').
+      # Microsoft / Entra sign-in. AZURE_URL is the authority BASE only
+      # (no /v2.0 suffix). GoTrue appends /oauth2/v2.0/authorize.
+      # Commercial: https://login.microsoftonline.com/<tenant-or-common>
+      # GCC High:    https://login.microsoftonline.us/<tenant-id>
       GOTRUE_EXTERNAL_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
       GOTRUE_EXTERNAL_AZURE_CLIENT_ID: ${KNONIX_AUTH_AZURE_CLIENT_ID:-}
       GOTRUE_EXTERNAL_AZURE_SECRET: ${KNONIX_AUTH_AZURE_SECRET:-}
@@ -269,6 +286,36 @@ services:
     volumes:
       - ./kong.yml:/home/kong/temp.yml:ro
     entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+
+  # Daily seat report to the central Knonix License Service (no PII).
+  # Requires KNONIX_HEARTBEAT_SECRET (auto-generated by install.sh).
+  heartbeat-cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - knonixai
+    environment:
+      KNONIX_HEARTBEAT_SECRET: ${KNONIX_HEARTBEAT_SECRET:-}
+      KNONIX_HEARTBEAT_URL: ${KNONIX_HEARTBEAT_URL:-http://knonixai:3000/api/knonix/heartbeat}
+    volumes:
+      - ./scripts/heartbeat-cron.sh:/scripts/heartbeat-cron.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$${KNONIX_HEARTBEAT_SECRET}" ]; then
+          echo "[heartbeat-cron] KNONIX_HEARTBEAT_SECRET unset — seat reporting disabled."
+          sleep infinity
+        fi
+        apk add --no-cache curl >/dev/null
+        echo "[heartbeat-cron] started — heartbeat every 24h"
+        # Fire once shortly after boot so new installs appear on the fleet board.
+        sleep 90
+        sh /scripts/heartbeat-cron.sh || true
+        while true; do
+          sleep 86400
+          sh /scripts/heartbeat-cron.sh || true
+        done
 
 volumes:
   postgres_data:
