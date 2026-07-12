@@ -17,6 +17,8 @@ open-weight models run inside your boundary, so your data never has to leave.
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | **CMMC / DFARS / NIST mapping, readiness runbook, competitive matrix** |
 | **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers, GPU sizing, NVIDIA Jetson** |
 | **[MIGRATION.md](./MIGRATION.md)** | **Move install to a larger host (`migrate.sh`)** |
+| **[TERMS_OF_USE.md](./TERMS_OF_USE.md)** | **Legal terms — use at your own risk; liability limits** |
+| **[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)** | **Privacy — self-hosted data stays with you** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
 
 ---
@@ -388,10 +390,21 @@ Details, JetPack notes, and lean env profile: **[SYSTEM_REQUIREMENTS.md § NVIDI
 | [CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md) | CMMC/DFARS/NIST, SSP/POA&M, compliance competitive table |
 | [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) | Hardware tiers, disk, GPU, **Jetson** |
 | [MIGRATION.md](./MIGRATION.md) | Move install to another host (`scripts/migrate.sh`) |
+| [TERMS_OF_USE.md](./TERMS_OF_USE.md) | Terms of use — **AS IS**, no liability for data loss/breaches |
+| [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) | Privacy policy — customer-controlled self-hosted data |
 | [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Full `.env` reference |
 | [.env.example](./.env.example) | Annotated config template |
 
 Source product docs (developers with private access): [knonix/KnonixAI](https://github.com/knonix/KnonixAI) → `docs/`
+
+---
+
+## Legal
+
+By installing or using KnonixAI you agree to the **[Terms of Use](./TERMS_OF_USE.md)**.  
+Privacy practices: **[Privacy Policy](./PRIVACY_POLICY.md)**.
+
+**Summary (not a substitute for the full Terms):** KnonixAI is **self-hosted, use-at-your-own-risk software**. You are solely responsible for security, backups, compliance, and all Customer Data. **Knonix is not liable for data loss, security breaches, incorrect AI outputs, failed assessments, or consequential damages**, to the maximum extent permitted by law.
 
 ---
 

@@ -94,3 +94,8 @@ Or open: `https://your-domain/api/knonix/health`
 - You can add domain + HTTPS later by editing `.env` and re-running `./install.sh`  
 
 You never need to build the app from source for a normal customer install.
+
+## Legal
+
+By installing KnonixAI you agree to the **[Terms of Use](./TERMS_OF_USE.md)** (use at your own risk; you are responsible for security and backups).  
+Privacy: **[Privacy Policy](./PRIVACY_POLICY.md)**.

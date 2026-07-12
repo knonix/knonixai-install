@@ -209,6 +209,8 @@ KnonixAI is built to **author complete contractor documentation**, not only Q&A.
 | [COMPARISON.md](./COMPARISON.md) | Competitive matrix vs Copilot, ChatGPT, Claude, Glean, … |
 | [GETTING_STARTED.md](./GETTING_STARTED.md) | First hour + day-1 prompts |
 | [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) | Entra / GCC High / Google env vars |
+| [TERMS_OF_USE.md](./TERMS_OF_USE.md) | Legal — use at own risk; customer assumes security/compliance risk |
+| [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) | Privacy — self-hosted data stays in your boundary |
 | [README.md](./README.md) | Installer wizard & OAuth redirect URIs |
 
 ---

@@ -590,6 +590,8 @@ done
 
 echo
 echo "==> KnonixAI is up."
+echo "    Legal: by using this software you accept TERMS_OF_USE.md (use at your own risk)."
+echo "    Privacy: see PRIVACY_POLICY.md — self-hosted data stays in your boundary."
 echo "    App:   ${APP_URL}"
 echo "    Admin: ${APP_URL}/admin"
 echo "    Health:${APP_URL}/api/knonix/health"

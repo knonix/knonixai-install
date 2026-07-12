@@ -16,6 +16,8 @@ Installs the prebuilt image from GHCR — **no source access or token required**
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | Compliance / capture | CMMC/DFARS/NIST mapping, SSP/POA&M suite, competitive compliance table |
 | **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | IT / ops | CPU/RAM/disk/GPU, **NVIDIA Jetson**, model sizing |
 | **[MIGRATION.md](./MIGRATION.md)** | IT / ops | Move install to a larger host (`migrate.sh`) |
+| **[TERMS_OF_USE.md](./TERMS_OF_USE.md)** | Legal | Terms — use at own risk; liability limits |
+| **[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)** | Legal | Privacy — self-hosted data stays with you |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Ops | Every `.env` variable |
 | **[.env.example](./.env.example)** | Ops | Annotated config template |
 
@@ -112,5 +114,6 @@ docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
 - **Sovereign mode** (default): local models — slower on small CPUs, data stays put.  
 - **Frontier mode** (opt-in): cloud speed — **not** for CUI unless policy allows.  
 - **CMMC docs** are decision-support drafts, not C3PAO certification.  
+- **Legal:** installation is **use at your own risk** — see **[TERMS_OF_USE.md](./TERMS_OF_USE.md)** and **[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)**.  
 
 Sales / licensing: **sales@knonix.com**
