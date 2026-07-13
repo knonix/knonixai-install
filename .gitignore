@@ -12,3 +12,6 @@ secrets/
 # Platform host runtime (operator only — never ship customer data/secrets)
 platform/license-service/data/
 SESSION_CHECKPOINT.md
+
+# Release build staging
+image-build/context/
