@@ -126,7 +126,8 @@ fi
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
-    echo "Created .env from .env.example"
+    chmod 600 .env 2>/dev/null || true
+    echo "Created .env from .env.example (mode 600)"
   else
     echo "ERROR: no .env or .env.example found in $(pwd)." >&2
     exit 1
@@ -503,6 +504,8 @@ if [[ -n "$(read_env KNONIX_LICENSE_ADMIN_TOKEN)" ]]; then
   echo "         Clearing it so this customer install cannot act as fleet admin."
   set_env KNONIX_LICENSE_ADMIN_TOKEN ""
 fi
+# Secrets file must not be world-readable
+chmod 600 .env 2>/dev/null || true
 # Never pull license-service or platform Caddy via customer install path.
 if [[ -f docker-compose.platform.yml ]]; then
   : # may exist in repo for Knonix ops; we intentionally never -f it here
