@@ -1,0 +1,87 @@
+# Publish customer app image to GHCR: ghcr.io/knonix/knonixai
+# Builds on top of the current :latest base, bakes knonix-entrypoint + health patch.
+name: Publish GHCR image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver override (default: VERSION file)"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "VERSION"
+      - "scripts/knonix-entrypoint.sh"
+      - "image-build/**"
+      - ".github/workflows/publish-ghcr.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/knonix/knonixai
+  BASE_IMAGE: ghcr.io/knonix/knonixai:latest
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+          else
+            VER="$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "ver=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Publishing installer version ${VER}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull base image
+        run: docker pull "${BASE_IMAGE}"
+
+      - name: Stage build context
+        run: |
+          mkdir -p image-build/context
+          cp -f scripts/knonix-entrypoint.sh image-build/context/knonix-entrypoint.sh
+          cp -f image-build/patch-health-auth.cjs image-build/context/patch-health-auth.cjs
+          cp -f image-build/Dockerfile.release image-build/context/Dockerfile
+
+      - name: Build
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          docker build \
+            --build-arg "BASE_IMAGE=${BASE_IMAGE}" \
+            --build-arg "KNONIX_INSTALLER_VERSION=${VER}" \
+            --label "org.opencontainers.image.version=${VER}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            -f image-build/context/Dockerfile \
+            -t "${IMAGE}:v${VER}" \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:installer-${VER}" \
+            image-build/context
+
+      - name: Smoke entrypoint
+        run: |
+          docker run --rm --entrypoint sh "${IMAGE}:v${{ steps.ver.outputs.ver }}" -c \
+            'test -x /knonix-scripts/knonix-entrypoint.sh && cat /knonix-scripts/INSTALLER_VERSION'
+
+      - name: Push tags
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          docker push "${IMAGE}:v${VER}"
+          docker push "${IMAGE}:latest"
+          docker push "${IMAGE}:installer-${VER}"

@@ -93,7 +93,16 @@ for m in "${CHAT_MODEL}" nomic-embed-text "${CODING_MODEL}"; do
   "${COMPOSE[@]}" exec -T ollama ollama pull "$m" || echo "    WARN: pull failed for $m"
 done
 
-# 5. Verify
+# 5. Org-only Spaces: every active membership gets space_members access
+if [[ -x scripts/sync-org-space-access.sh ]]; then
+  echo "==> Syncing Spaces access for org members"
+  bash scripts/sync-org-space-access.sh || echo "    WARN: space access sync failed (non-fatal)"
+elif [[ -f scripts/sync-org-space-access.sh ]]; then
+  echo "==> Syncing Spaces access for org members"
+  bash scripts/sync-org-space-access.sh || echo "    WARN: space access sync failed (non-fatal)"
+fi
+
+# 6. Verify
 echo "==> Stack status"
 "${COMPOSE[@]}" ps
 
@@ -107,7 +116,7 @@ fi
 curl -fsk --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/knonix/health" && echo
 curl -fsk --resolve "${DOMAIN}:443:127.0.0.1" -o /dev/null -w "fleet_page:%{http_code}\n" "https://${DOMAIN}/admin/fleet"
 
-# 6. DMZ note
+# 7. DMZ note
 echo
 echo "==> Done."
 echo "    Local:  https://${DOMAIN}/ (SNI to 127.0.0.1)"

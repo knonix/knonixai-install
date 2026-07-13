@@ -636,6 +636,20 @@ else
   echo "WARNING: Postgres did not become ready in time; skipping DB bootstrap."
 fi
 
+# 4c. Org-only Spaces: ensure active org members can list/open shared Spaces.
+if [[ -n "${pg_ready:-}" ]]; then
+  if [[ -f init-org-space-share.sql ]]; then
+    echo "==> Installing org Spaces share trigger"
+    docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      psql -U "${PG_USER:-knonixai}" -d "${PG_DB:-knonixai}" < init-org-space-share.sql \
+      >/dev/null 2>&1 || echo "WARNING: org space share trigger not applied (non-fatal)"
+  fi
+  if [[ -f scripts/sync-org-space-access.sh ]]; then
+    echo "==> Syncing Spaces access for active organization members"
+    bash scripts/sync-org-space-access.sh || echo "WARNING: space access sync failed (non-fatal)"
+  fi
+fi
+
 # 5. Pull default sovereign models into Ollama (profile-aware; low-end = 3B only).
 CHAT_MODEL="$(read_env KNONIX_MODEL)"; CHAT_MODEL="${CHAT_MODEL:-qwen2.5:3b}"
 CODING_MODEL="$(read_env KNONIX_CODING_MODEL)"; CODING_MODEL="${CODING_MODEL:-${CHAT_MODEL}}"

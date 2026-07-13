@@ -111,6 +111,38 @@ const ENSURE_RELATED_FN =
   }
 }
 
+// --- 3b) Spaces: after create, share with all active org members (org-only) ---
+// App lists/opens spaces via space_members ⋈ userId; only creator was added by default.
+// Do NOT use drizzle eq/and here: in createSpace the space id shadows the orm alias (`t`).
+// Select memberships and filter in JS; schema export includes memberships + spaceMembers.
+{
+  function orgSharePatch(schema, spaceVar, userObj) {
+    const oldStr =
+      `await e.insert(${schema}.spaceMembers).values({spaceId:${spaceVar},userId:${userObj}.userId,role:"owner"})});`;
+    const newStr =
+      `await e.insert(${schema}.spaceMembers).values({spaceId:${spaceVar},userId:${userObj}.userId,role:"owner"});` +
+      `try{const _om=await e.select({userId:${schema}.memberships.userId,orgId:${schema}.memberships.orgId,status:${schema}.memberships.status}).from(${schema}.memberships);` +
+      `for(const _m of _om){if(_m.orgId===${userObj}.orgId&&"active"===_m.status&&_m.userId&&_m.userId!==${userObj}.userId){try{await e.insert(${schema}.spaceMembers).values({spaceId:${spaceVar},userId:_m.userId,role:"editor"})}catch(_e){}}}` +
+      `}catch(_e){console.warn("[spaces] org share:",_e)}});`;
+    return [oldStr, newStr];
+  }
+  // Chunk alias variants observed in .next server builds
+  const variants = [
+    orgSharePatch("i", "t", "r"), // spaceId=t, params=r
+    orgSharePatch("n", "t", "r"),
+    orgSharePatch("s", "r", "t"), // spaceId=r, params=t
+    orgSharePatch("n", "r", "t"),
+    orgSharePatch("a", "r", "t"),
+  ];
+  let ok = false;
+  for (const [oldStr, newStr] of variants) {
+    for (const f of serverFiles) {
+      if (patchFile(f, oldStr, newStr, "spaces-org-share-on-create")) ok = true;
+    }
+  }
+  if (!ok) console.log("[knonix-entrypoint] spaces-org-share-on-create: pattern not found");
+}
+
 // --- 4) Related follow-ups fallback (small Ollama models rarely emit ```spec) ---
 // UI needs a valid ```spec JSONL with Button+submitQuery. forceFollowUps is set
 // but never enforced server-side — inject after stream completes (persist) and in

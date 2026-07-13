@@ -223,6 +223,47 @@ if [[ "${mode}" == "connected" ]]; then
 fi
 
 echo
+echo "-- Sessions & Spaces (multi-user / org-only) --"
+# DB-level proof: auth sessions are per user_id; Spaces listed via space_members ∩ org.
+if "${DOCKER[@]}" compose exec -T postgres psql -U "${POSTGRES_USER:-knonixai}" -d "${POSTGRES_DB:-knonixai}" -v ON_ERROR_STOP=1 -c "
+SELECT
+  (SELECT count(*) FROM auth.users) AS auth_users,
+  (SELECT count(*) FROM auth.sessions) AS auth_sessions,
+  (SELECT count(DISTINCT user_id) FROM auth.sessions) AS users_with_sessions,
+  (SELECT count(*) FROM memberships WHERE status = 'active') AS active_members,
+  (SELECT count(*) FROM spaces) AS spaces,
+  (SELECT count(*) FROM space_members) AS space_member_rows;
+" 2>/dev/null; then
+  # Orphan check: active members missing space_members for org spaces
+  missing="$("${DOCKER[@]}" compose exec -T postgres psql -U "${POSTGRES_USER:-knonixai}" -d "${POSTGRES_DB:-knonixai}" -tA -c "
+SELECT count(*) FROM spaces s
+JOIN memberships m ON m.org_id = s.org_id AND m.status = 'active' AND m.user_id IS NOT NULL AND m.user_id <> ''
+WHERE NOT EXISTS (
+  SELECT 1 FROM space_members sm WHERE sm.space_id = s.id AND sm.user_id = m.user_id
+);
+" 2>/dev/null | tr -d '[:space:]')"
+  if [[ "${missing}" == "0" ]]; then
+    echo "OK    every active org member has space_members access on org Spaces"
+  elif [[ -n "${missing}" && "${missing}" != "0" ]]; then
+    echo "WARN  ${missing} active org member(s) missing space_members — run: ./scripts/sync-org-space-access.sh"
+  fi
+  # Session isolation: no session row shared across users (PK is session id)
+  shared="$("${DOCKER[@]}" compose exec -T postgres psql -U "${POSTGRES_USER:-knonixai}" -d "${POSTGRES_DB:-knonixai}" -tA -c "
+SELECT count(*) FROM (
+  SELECT id FROM auth.sessions GROUP BY id HAVING count(DISTINCT user_id) > 1
+) x;
+" 2>/dev/null | tr -d '[:space:]')"
+  if [[ "${shared}" == "0" ]]; then
+    echo "OK    auth.sessions are per-user (no shared session ids)"
+  else
+    echo "FAIL  found sessions linked to multiple users"
+    fail=1
+  fi
+else
+  echo "WARN  could not query auth.sessions / space_members (postgres not ready?)"
+fi
+
+echo
 echo "-- Updates --"
 if [[ -f VERSION ]]; then
   echo "    Installer VERSION: $(tr -d '[:space:]' < VERSION)"

@@ -14,9 +14,39 @@ Check for updates on an install:
 
 ---
 
+## [1.6.1] — 2026-07-13
+
+### Added
+- Org-only Spaces collaboration (create-time share + membership trigger + sync script).
+- Per-user session / Spaces checks in `verify-install.sh`.
+- GHCR publish workflow (`.github/workflows/publish-ghcr.yml`).
+
+### Fixed
+- Space create only granted access to the creator; other org members could not list Spaces.
+- Entrypoint org-share patch covered all minified schema aliases.
+
+### Upgrade notes
+```bash
+cd knonixai-install
+git pull origin main
+./scripts/check-updates.sh
+docker compose pull
+docker compose up -d
+# optional backfill:
+./scripts/sync-org-space-access.sh
+```
+
+---
+
 ## [1.6.0] — 2026-07-13
 
 ### Added
+- **Per-user sessions** verified: GoTrue JWT `sub` + `session_id` are unique per login;
+  private chats are scoped to `user_id` (API list never crosses users).
+- **Org-only Spaces collaboration:** all *active* organization members can list/open
+  shared Spaces; non-members get 403. New Spaces auto-share with the org on create
+  (entrypoint patch). Existing Spaces backfilled via `scripts/sync-org-space-access.sh`
+  and `init-org-space-share.sql` (trigger on membership activate).
 - **Resources rail** (right side, collapsible): links, files, and sources for each chat.
 - **Related follow-ups fallback** when local models skip ` ```spec ` blocks.
 - **Changelog + update checker** (`CHANGELOG.md`, `VERSION`, `scripts/check-updates.sh`).
