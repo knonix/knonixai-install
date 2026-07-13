@@ -1,0 +1,88 @@
+# KnonixAI reverse proxy — PLATFORM host only (ai.knonix.com).
+# Selected by docker-compose.platform.yml. Do NOT use on customer installs.
+#
+# Extra routes:
+#   /v1/*          → license-service
+#                    · POST heartbeat/register/validate — customer enrollment token
+#                    · GET  licenses / billing-summary — Knonix admin token only
+#   /healthz       → license-service (liveness)
+#   /admin/fleet*  → license-service fleet + billing board (operator login required)
+#
+# Customer installs use Caddyfile (no fleet routes). They never get this file
+# as their active config. See docs/PUBLIC_VS_PLATFORM.md.
+
+{
+	email {$KNONIX_ACME_EMAIL}
+}
+
+{$KNONIX_DOMAIN} {
+	# Do not compress streaming APIs (chat/coding/model-pull SSE).
+	@compressible {
+		not path /api/chat* /api/coding* /api/knonix/models/pull*
+		not header Content-Type *text/event-stream*
+	}
+	encode @compressible zstd gzip
+
+	handle_path /supabase/* {
+		reverse_proxy supabase-kong:8000
+	}
+
+	# Fleet / license APIs — operator monitoring of customer installs + seats.
+	# Not for end customers.
+	handle /v1/* {
+		reverse_proxy license-service:8787
+	}
+
+	handle /healthz {
+		reverse_proxy license-service:8787
+	}
+
+	handle /admin/fleet* {
+		reverse_proxy license-service:8787
+	}
+
+	handle /api/knonix/models/pull* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 2h
+				write_timeout 2h
+			}
+		}
+	}
+
+	handle /api/chat* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+	handle /api/coding* {
+		reverse_proxy knonixai:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 15m
+				write_timeout 15m
+				response_header_timeout 15m
+			}
+		}
+	}
+
+	reverse_proxy knonixai:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

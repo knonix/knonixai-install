@@ -1,0 +1,12 @@
+# Bake the health-check runtime-env fix into a publishable public image.
+# Usage: see publish-fixed-image.sh
+ARG BASE_IMAGE=ghcr.io/knonix/knonixai:latest
+FROM ${BASE_IMAGE}
+
+USER root
+COPY patch-health-auth.cjs /tmp/patch-health-auth.cjs
+RUN node /tmp/patch-health-auth.cjs && rm -f /tmp/patch-health-auth.cjs
+
+# Image default entrypoint remains docker-entrypoint.sh (migrations + next).
+# The installer still mounts knonix-entrypoint.sh as a safety net for older
+# cached layers; once this image is universal, that mount is a no-op.

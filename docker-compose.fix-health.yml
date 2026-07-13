@@ -1,0 +1,5 @@
+# Deprecated: health auth runtime patch is now in base docker-compose.yml
+# (scripts/knonix-entrypoint.sh). Kept as an empty overlay so older
+# platform-up.sh / docs that reference -f docker-compose.fix-health.yml
+# keep working without double-applying entrypoints.
+services: {}

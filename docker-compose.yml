@@ -14,11 +14,9 @@
 #   supabase-auth  - GoTrue auth server (local + Google/Microsoft sign-in)
 #   supabase-kong  - API gateway that fronts GoTrue (NEXT_PUBLIC_SUPABASE_URL)
 #
-# Authentication is OFF by default (ENABLE_AUTH=false, single-tenant anonymous
-# mode). To let users create real accounts entirely in-boundary, set
-# ENABLE_AUTH=true plus the KNONIX_AUTH_* / SUPABASE_* variables described in
-# .env.local.example, then `docker compose up -d`. No cloud Supabase is used;
-# GoTrue + Kong run next to your app and reuse the Postgres above.
+# Authentication is ON by default (ENABLE_AUTH=true). install.sh mints
+# KNONIX_AUTH_JWT_SECRET + Supabase anon/service JWTs and starts GoTrue + Kong
+# in-boundary. Set ENABLE_AUTH=false only for single-user anonymous mode.
 #
 # Pin KNONIX_IMAGE_TAG in .env to a specific version (e.g. v1.2.0) for
 # reproducible deployments. It defaults to "latest".
@@ -29,7 +27,11 @@ services:
     image: ghcr.io/knonix/knonixai:${KNONIX_IMAGE_TAG:-latest}
     # "local" tags are built on this host — do not try to pull them from GHCR.
     pull_policy: ${KNONIX_IMAGE_PULL_POLICY:-always}
-    command: npx next start -H 0.0.0.0
+    # Runtime patch for Next.js health check (NEXT_PUBLIC_* empty at image build).
+    # No-op once the published image ships the fixed health route. See
+    # scripts/knonix-entrypoint.sh and image-build/ for the permanent image fix.
+    entrypoint: ["/bin/sh", "/knonix-scripts/knonix-entrypoint.sh"]
+    command: ["npx", "next", "start", "-H", "0.0.0.0"]
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
@@ -51,11 +53,15 @@ services:
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
       KNONIX_AUTH_SITE_URL: ${KNONIX_AUTH_SITE_URL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
-      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-1536}
+      # Low-resource defaults (install.sh overrides from hardware-profile.sh).
+      # 3B + short context = interactive on 8–16 GB CPU / small VMs.
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-1536}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-256}
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
-      KNONIX_MODEL: ${KNONIX_MODEL:-qwen3:8b}
-      KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5-coder:7b}
+      # Prefer qwen2.5:3b on CPU; raise to 7B only when RAM/GPU allows.
+      KNONIX_MODEL: ${KNONIX_MODEL:-qwen2.5:3b}
+      KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5:3b}
+      INFERENCE_MAX_OUTPUT_TOKENS: ${INFERENCE_MAX_OUTPUT_TOKENS:-512}
       KNONIX_WORKSPACES_ROOT: /var/knonix/workspaces
       # Optional install-wide PATs for Code workspace private clones
       KNONIX_GITHUB_TOKEN: ${KNONIX_GITHUB_TOKEN:-}
@@ -73,10 +79,10 @@ services:
       KNONIX_MS_OAUTH_CLIENT_SECRET: ${KNONIX_MS_OAUTH_CLIENT_SECRET:-}
       KNONIX_MS_CLOUD_ENVIRONMENT: ${KNONIX_MS_CLOUD_ENVIRONMENT:-commercial}
       KNONIX_MS_TENANT_ID: ${KNONIX_MS_TENANT_ID:-}
-      # Licensing / seats. Free tier = 1 user (KNONIX_FREE_SEATS). Extra users are paid.
-      # Connected mode heartbeats to the Knonix License Service so seats are
-      # metered. Install.sh defaults these for fleet enrollment — see README.
-      # KNONIX_PLATFORM_OWNER=true only on the Knonix-operated host (unlimited seats).
+      # Licensing / seats (customer default). Free tier = 1 user; extra users are paid.
+      # Connected mode: OUTBOUND seat heartbeats to Knonix only (billing accuracy).
+      # Customers never host fleet admin. PLATFORM_OWNER=true only on Knonix platform host.
+      # See docs/PUBLIC_VS_PLATFORM.md
       KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-connected}
       KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-1}
       KNONIX_PLATFORM_OWNER: ${KNONIX_PLATFORM_OWNER:-false}
@@ -103,6 +109,7 @@ services:
       - knonix_workspaces:/var/knonix/workspaces
       # Read-only host mount for "local folder" coding projects (paths under /host/…).
       - ${KNONIX_HOST_MOUNT:-/home/knonix}:/host:ro
+      - ./scripts/knonix-entrypoint.sh:/knonix-scripts/knonix-entrypoint.sh:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,6 +131,15 @@ services:
       - '${OLLAMA_PORT:-11434}:11434'
     volumes:
       - ollama_data:/root/.ollama
+    # CPU VM defaults: one model loaded, all cores, no multi-slot contention.
+    # On a real NVIDIA host, comment these out and enable the deploy block below.
+    environment:
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
+      OLLAMA_FLASH_ATTENTION: ${OLLAMA_FLASH_ATTENTION:-1}
+      # Match host cores (this QEMU box has 8). Override if you pass more vCPUs.
+      OLLAMA_NUM_THREAD: ${OLLAMA_NUM_THREAD:-8}
     # Uncomment to enable NVIDIA GPU acceleration (requires nvidia-container-toolkit):
     # deploy:
     #   resources:

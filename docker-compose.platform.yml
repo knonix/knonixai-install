@@ -1,0 +1,89 @@
+# ============================================================================
+# PLATFORM HOST ONLY — Knonix-operated fleet / billing (e.g. ai.knonix.com).
+# NEVER apply this file on a customer install. Customers use:
+#   docker-compose.yml + docker-compose.proxy.yml + ./install.sh
+# They get local software only; optional outbound heartbeats to THIS host
+# report seat counts for Knonix billing. Customers never access /admin/fleet.
+# ============================================================================
+#
+#   sudo ./scripts/platform-up.sh
+#   # or:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.proxy.yml \
+#     -f docker-compose.platform.yml \
+#     --profile auth up -d
+#
+# Provides:
+#   - license-service (Docker network + loopback only) for /v1/* + /admin/fleet
+#   - Platform owner env on the app container (unlimited seats for Knonix ops)
+
+services:
+  license-service:
+    build:
+      context: ./platform/license-service
+      dockerfile: Dockerfile
+    image: knonix/license-service:${KNONIX_LICENSE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      PORT: '8787'
+      KNONIX_LICENSE_DATA_DIR: /data
+      # Operator-only — unlocks fleet board + billing APIs (never ship to customers)
+      KNONIX_LICENSE_ADMIN_TOKEN: ${KNONIX_LICENSE_ADMIN_TOKEN:-}
+      KNONIX_HEARTBEAT_SECRET: ${KNONIX_HEARTBEAT_SECRET:-}
+      # Shared enrollment token customers put in THEIR .env (outbound heartbeats only)
+      KNONIX_LICENSE_SERVICE_TOKEN: ${KNONIX_LICENSE_SERVICE_TOKEN:-}
+      KNONIX_LICENSE_KEY: ${KNONIX_LICENSE_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      KNONIX_SEAT_PRICE_ID: ${KNONIX_SEAT_PRICE_ID:-}
+    volumes:
+      - license_service_data:/data
+    # Loopback only — public path is Caddy → license-service on the Docker network.
+    # Do NOT publish 0.0.0.0:8787 (that would expose fleet APIs on the DMZ).
+    ports:
+      - '127.0.0.1:${KNONIX_LICENSE_PORT:-8787}:8787'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '-qO-',
+          'http://127.0.0.1:8787/healthz',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # Ensure platform flags are never dropped if .env is incomplete on recreate
+  knonixai:
+    extra_hosts:
+      - '${KNONIX_DOMAIN:-ai.knonix.com}:host-gateway'
+    environment:
+      KNONIX_PLATFORM_MODE: ${KNONIX_PLATFORM_MODE:-cloud}
+      KNONIX_PLATFORM_OWNER: ${KNONIX_PLATFORM_OWNER:-true}
+      KNONIX_LICENSE_ADMIN_TOKEN: ${KNONIX_LICENSE_ADMIN_TOKEN:-}
+      KNONIX_STUDIO_ENABLED: ${KNONIX_STUDIO_ENABLED:-true}
+      # MUST be false on self-hosted platform (local Ollama). When true, the chat
+      # hides the model bubble/selector (getModelSelectorData + ChatPanel).
+      # Only set true for multi-tenant hosted SaaS where models are fixed remotely.
+      KNONIX_CLOUD_DEPLOYMENT: ${KNONIX_CLOUD_DEPLOYMENT:-false}
+      # Prefer in-network Kong for server-side GoTrue when set by the app
+      KNONIX_AUTH_INTERNAL_URL: http://supabase-kong:8000
+
+  caddy:
+    depends_on:
+      - knonixai
+      - license-service
+    # TCP HTTPS only (no UDP/443 HTTP/3) — more reliable on residential DMZ.
+    ports: !override
+      - '80:80'
+      - '443:443'
+    # Replace customer Caddyfile with platform fleet routes.
+    volumes: !override
+      - ./Caddyfile.platform:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  license_service_data:

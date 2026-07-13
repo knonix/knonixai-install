@@ -178,7 +178,7 @@ Org admins still enable providers in **Admin → Connectors**; each user links t
 |----------|---------|-------------|
 | `KNONIX_PLATFORM_MODE` | `sovereign` | Platform posture |
 | `KNONIX_STUDIO_ENABLED` | varies | Studio playbooks UI/API |
-| `KNONIX_CLOUD_DEPLOYMENT` | — | Cloud-specific UX flags (if used) |
+| `KNONIX_CLOUD_DEPLOYMENT` | `false` | **Self-hosted must stay `false`.** When `true`, chat **hides the model bubble/selector** and uses hosted multi-tenant behavior. Platform fleet host uses `KNONIX_PLATFORM_OWNER=true` instead — do not set cloud=true just for fleet. |
 
 ---
 

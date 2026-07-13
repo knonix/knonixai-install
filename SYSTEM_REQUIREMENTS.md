@@ -16,13 +16,39 @@ Comparisons: **[COMPARISON.md](./COMPARISON.md)**
 
 ## Quick pick
 
-| Your goal | Min hardware | Recommended models |
-| --------- | ------------ | ------------------ |
-| **Demo / single evaluator** | 4 vCPU · 16 GB RAM · 50 GB disk | `qwen3:8b` + embed |
-| **Smooth team / CMMC space** | **16 vCPU · 64 GB RAM · 200 GB disk** | `qwen3:8b` + coder + R1 + embed |
-| **Fast local “best quality”** | 16+ cores · 64 GB · **24 GB NVIDIA dGPU** · 200 GB+ | Qwen3 14B/32B or R1 32B |
-| **Edge / Jetson** | **Orin NX 16 GB+** or **AGX Orin 32/64 GB** · 128 GB+ NVMe | `qwen3:8b` or smaller tools model |
+| Your goal | Min hardware | Recommended models (auto-selected by `./install.sh`) |
+| --------- | ------------ | ---------------------------------------------------- |
+| **Low CPU / small VM / no GPU** | **4 vCPU · 8–16 GB RAM · 40 GB disk** | **`qwen2.5:3b`** + embed (interactive) |
+| **Comfortable CPU laptop / 32 GB** | 8 vCPU · 32 GB RAM · 80 GB disk | `qwen2.5:7b` + optional coder |
+| **Smooth team / CMMC space** | **16 vCPU · 64 GB RAM · 200 GB disk** | 7B–8B tools + embed |
+| **Fast local “best quality”** | 16+ cores · 64 GB · **12–24 GB NVIDIA** · 200 GB+ | 7B–14B on GPU |
+| **Edge / Jetson** | **Orin NX 16 GB+** or **AGX Orin** · 128 GB+ NVMe | 3B–8B tools model |
 | **Near-frontier open weights** | Multi-GPU 40–80 GB · 128 GB RAM · 500 GB | 70B / MoE class |
+
+`./install.sh` detects RAM + NVIDIA VRAM and applies a **low / medium / high** profile
+automatically (see `scripts/hardware-profile.sh`). Override anytime with `KNONIX_MODEL`
+in `.env` or Admin → Models.
+
+---
+
+## Low resource (CPU-only / low GPU) — **customer default**
+
+Designed so **regular users** get answers in seconds–tens of seconds, not multi-minute hangs.
+
+| Resource             | Target                                                               |
+| -------------------- | -------------------------------------------------------------------- |
+| **CPU**              | 4–8 vCPU (x86_64 or ARM64)                                           |
+| **RAM**              | **8 GB minimum**, **16 GB recommended**                              |
+| **Docker data disk** | **40 GB free** (3B model ≈ 2 GB + stack)                             |
+| **GPU**              | None, or **&lt; 6 GB** VRAM (treated like low profile)               |
+| **Default model**    | **`qwen2.5:3b`** (same for coding to avoid loading two models)       |
+| **Context / output** | `OLLAMA_NUM_CTX=1536`, short max tokens for Quick mode               |
+
+**Expect:** ~3–10 tok/s on modern CPUs for short Quick-mode answers; keep **one** model
+loaded (`OLLAMA_MAX_LOADED_MODELS=1`). Avoid Deep research + huge RAG on 8 GB hosts.
+
+**Do not** ship 7B/8B as the default on low-end boxes — cold load alone can take minutes
+and generation can drop to &lt; 1 tok/s, which feels “broken” next to cloud/OpenClaw UIs.
 
 ---
 
@@ -31,13 +57,13 @@ Comparisons: **[COMPARISON.md](./COMPARISON.md)**
 | Resource             | Minimum                                                              |
 | -------------------- | -------------------------------------------------------------------- |
 | **CPU**              | 4 vCPU (x86_64 or ARM64)                                             |
-| **RAM**              | 16 GB (32 GB strongly preferred for 7B–9B models on CPU)             |
-| **Docker data disk** | **50 GB free**                                                       |
+| **RAM**              | **8 GB** (16 GB preferred); use **3B** models below 20 GB            |
+| **Docker data disk** | **40 GB free** (50+ if you add 7B models)                            |
 | **OS root disk**     | 20 GB                                                                |
 | **GPU**              | None required                                                        |
 | **Network**          | Outbound HTTPS for image/model pulls; ports 80/443 for public domain |
 
-**Expect:** usable chat on 7B–8B tools models; multi-minute answers on 2–4 vCPU; avoid large multi-model catalogs.
+**Expect:** interactive chat with **3B** defaults; 7B–8B only if you have ≥21 GB RAM or a usable GPU.
 
 ---
 

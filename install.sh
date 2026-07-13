@@ -199,11 +199,13 @@ if [[ -t 0 ]]; then
   fi
 
   echo
-  echo "    Fleet seat reporting (connected mode):"
-  echo "    Knonix tracks seat counts via a privacy-preserving heartbeat."
-  echo "    Paste the fleet enrollment token from your Knonix license email."
-  echo "    Leave blank only for offline/local-only free tier (no fleet board)."
-  NEW_TOKEN="$(prompt_value "KNONIX_LICENSE_SERVICE_TOKEN (fleet enrollment)" "${FLEET_TOKEN_NOW}")"
+  echo "    Seat reporting for billing (optional, connected mode):"
+  echo "    Your install stays fully local. If you paste the enrollment token from"
+  echo "    Knonix, a daily privacy-preserving heartbeat reports ONLY seat count"
+  echo "    (no chat content, no user PII) so Knonix can bill accurately."
+  echo "    You do NOT get access to any Knonix fleet or licensing console."
+  echo "    Leave blank for free/local-only (no reporting to Knonix)."
+  NEW_TOKEN="$(prompt_value "KNONIX_LICENSE_SERVICE_TOKEN (enrollment from Knonix)" "${FLEET_TOKEN_NOW}")"
   if [[ -n "${NEW_TOKEN}" ]]; then
     set_env KNONIX_LICENSE_SERVICE_TOKEN "${NEW_TOKEN}"
     set_env KNONIX_LICENSE_MODE "connected"
@@ -248,12 +250,7 @@ if command -v openssl >/dev/null 2>&1; then
     set_env KNONIX_CONNECTOR_ENCRYPTION_KEY "$(openssl rand -base64 32)"
     echo "==> Generated KNONIX_CONNECTOR_ENCRYPTION_KEY (connector token encryption)"
   fi
-  if [[ -z "$(read_env KNONIX_MODEL)" ]]; then
-    set_env KNONIX_MODEL "qwen2.5:7b"
-  fi
-  if [[ -z "$(read_env KNONIX_CODING_MODEL)" ]]; then
-    set_env KNONIX_CODING_MODEL "qwen2.5-coder:7b"
-  fi
+  # Model defaults come from hardware profile (after set_env_if_absent is defined).
 fi
 
 # 2b. Provision self-hosted auth (GoTrue + Kong) fully automatically.
@@ -300,6 +297,34 @@ set_env_if_absent() {
 }
 
 # set_env is defined above (guided config); keep set_env_if_absent for auth minting.
+
+# 2a. Hardware profile: low-CPU / low-GPU customers get 3B + tight context so
+# chat stays interactive. Operators who already set KNONIX_MODEL keep it.
+# shellcheck source=scripts/hardware-profile.sh
+if [[ -f "$(dirname "$0")/scripts/hardware-profile.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/scripts/hardware-profile.sh"
+elif [[ -f "./scripts/hardware-profile.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "./scripts/hardware-profile.sh"
+fi
+if declare -F detect_hardware_profile >/dev/null 2>&1; then
+  read -r HW_PROFILE HW_MEM_GB HW_GPU HW_CORES HW_VRAM_MB < <(detect_hardware_profile)
+  echo "==> Hardware profile: $(profile_description "${HW_PROFILE}")"
+  echo "    Detected: ${HW_MEM_GB} GB RAM, ${HW_CORES} CPU threads, GPU=${HW_GPU} (VRAM≈${HW_VRAM_MB} MB)"
+  apply_hardware_profile_env "${HW_PROFILE}" "${HW_CORES}"
+  if [[ "${HW_PROFILE}" == "low" ]]; then
+    echo "    Low-resource mode: default model qwen2.5:3b (override in .env or Admin → Models)."
+    echo "    Tip: Cloud-class speed needs a GPU host or frontier APIs for non-CUI work."
+  fi
+else
+  set_env_if_absent KNONIX_MODEL "qwen2.5:3b"
+  set_env_if_absent KNONIX_CODING_MODEL "qwen2.5:3b"
+  set_env_if_absent OLLAMA_NUM_CTX "1536"
+  set_env_if_absent OLLAMA_NUM_PREDICT "256"
+  set_env_if_absent INFERENCE_MAX_OUTPUT_TOKENS "512"
+  set_env_if_absent OLLAMA_KEEP_ALIVE "-1"
+fi
 
 AUTH_ENABLED="$(read_env ENABLE_AUTH)"
 AUTH_ENABLED="${AUTH_ENABLED:-true}"
@@ -448,19 +473,72 @@ else
 fi
 
 # 4. Pull the image and bring the stack up.
+#
+# Public customer installs always use the prebuilt GHCR image
+# (ghcr.io/knonix/knonixai:latest by default). Platform-only files
+# (docker-compose.platform.yml, Caddyfile.platform) are NEVER applied here —
+# those are for the Knonix-operated fleet host only (scripts/platform-up.sh).
 TAG="$(read_env KNONIX_IMAGE_TAG)"
 TAG="${TAG:-latest}"
-echo "==> Pulling ${IMAGE}:${TAG}"
-if ! docker pull "${IMAGE}:${TAG}"; then
-  echo "ERROR: could not pull ${IMAGE}:${TAG}." >&2
-  echo "       The image is public, so check your network/Docker setup and the" >&2
-  echo "       KNONIX_IMAGE_TAG in .env. If Knonix provisioned a PRIVATE image" >&2
-  echo "       for your org, set GHCR_USER + GHCR_TOKEN (read:packages) or run" >&2
-  echo "       'docker login ghcr.io' first. Questions: sales@knonix.com." >&2
-  exit 1
+
+# Guardrails: public installer = customer local software ONLY.
+# - No license-service / fleet board
+# - No platform-owner / unlimited seats
+# - No Knonix admin token (that would be a security leak if copied from platform)
+# Customers may optionally SEND seat heartbeats to Knonix (connected mode) so
+# Knonix can bill accurately — they never RECEIVE fleet visibility.
+if [[ "$(read_env KNONIX_PLATFORM_OWNER)" == "true" ]] || [[ "$(read_env KNONIX_PLATFORM_MODE)" == "cloud" ]]; then
+  echo "WARNING: .env had platform-owner flags (PLATFORM_OWNER / PLATFORM_MODE=cloud)."
+  echo "         Public ./install.sh is for customer installs only — clearing those flags."
+  echo "         For the Knonix fleet host (ai.knonix.com), use: sudo ./scripts/platform-up.sh"
+fi
+# Always force customer posture (idempotent).
+set_env KNONIX_PLATFORM_OWNER false
+if [[ "$(read_env KNONIX_PLATFORM_MODE)" == "cloud" ]] || [[ -z "$(read_env KNONIX_PLATFORM_MODE)" ]]; then
+  set_env KNONIX_PLATFORM_MODE sovereign
+fi
+# Strip operator-only secrets if a platform .env was copied by mistake.
+if [[ -n "$(read_env KNONIX_LICENSE_ADMIN_TOKEN)" ]]; then
+  echo "WARNING: KNONIX_LICENSE_ADMIN_TOKEN is set — that is Knonix-operator only."
+  echo "         Clearing it so this customer install cannot act as fleet admin."
+  set_env KNONIX_LICENSE_ADMIN_TOKEN ""
+fi
+# Never pull license-service or platform Caddy via customer install path.
+if [[ -f docker-compose.platform.yml ]]; then
+  : # may exist in repo for Knonix ops; we intentionally never -f it here
 fi
 
-echo "==> Starting the KnonixAI stack"
+# ":local" is only for images built on this host (docker build -t …:local).
+# It is not published to GHCR — do not try to pull it.
+if [[ "${TAG}" == "local" ]]; then
+  if docker image inspect "${IMAGE}:local" >/dev/null 2>&1; then
+    echo "==> Using existing local image ${IMAGE}:local (not pulling from GHCR)"
+    if [[ "$(read_env KNONIX_IMAGE_PULL_POLICY)" != "never" ]]; then
+      set_env KNONIX_IMAGE_PULL_POLICY never
+    fi
+  else
+    echo "WARNING: KNONIX_IMAGE_TAG=local but ${IMAGE}:local is not on this host."
+    echo "         :local is never published to GHCR (dev builds only)."
+    echo "         Switching to KNONIX_IMAGE_TAG=latest (public customer image)."
+    TAG=latest
+    set_env KNONIX_IMAGE_TAG latest
+    set_env KNONIX_IMAGE_PULL_POLICY always
+  fi
+fi
+
+if [[ "${TAG}" != "local" ]]; then
+  echo "==> Pulling public image ${IMAGE}:${TAG}"
+  if ! docker pull "${IMAGE}:${TAG}"; then
+    echo "ERROR: could not pull ${IMAGE}:${TAG}." >&2
+    echo "       Customers need anonymous pull of the public package on GHCR." >&2
+    echo "       Check network/Docker, and that KNONIX_IMAGE_TAG is 'latest' or a" >&2
+    echo "       published release tag. Private org images need GHCR_USER + GHCR_TOKEN" >&2
+    echo "       (read:packages) or 'docker login ghcr.io'. Questions: sales@knonix.com." >&2
+    exit 1
+  fi
+fi
+
+echo "==> Starting the KnonixAI stack (customer compose — no platform fleet service)"
 docker compose "${COMPOSE_ARGS[@]}" up -d
 
 # 4a. Confirm reverse proxy is up when domain mode is enabled.
@@ -555,21 +633,30 @@ else
   echo "WARNING: Postgres did not become ready in time; skipping DB bootstrap."
 fi
 
-# 5. Pull default sovereign models into Ollama (CPU-friendly defaults).
-CHAT_MODEL="$(read_env KNONIX_MODEL)"; CHAT_MODEL="${CHAT_MODEL:-qwen2.5:7b}"
-CODING_MODEL="$(read_env KNONIX_CODING_MODEL)"; CODING_MODEL="${CODING_MODEL:-qwen2.5-coder:7b}"
+# 5. Pull default sovereign models into Ollama (profile-aware; low-end = 3B only).
+CHAT_MODEL="$(read_env KNONIX_MODEL)"; CHAT_MODEL="${CHAT_MODEL:-qwen2.5:3b}"
+CODING_MODEL="$(read_env KNONIX_CODING_MODEL)"; CODING_MODEL="${CODING_MODEL:-${CHAT_MODEL}}"
 echo "==> Pulling default local models (${CHAT_MODEL}, nomic-embed-text)"
 echo "    (this can take several minutes on first run; needs free disk for models)"
 for model in "${CHAT_MODEL}" nomic-embed-text; do
   docker compose "${COMPOSE_ARGS[@]}" exec -T ollama ollama pull "${model}" || \
     echo "WARNING: failed to pull ${model} — pull later from /admin or: docker compose exec ollama ollama pull ${model}"
 done
-# Coding model is optional on small disks — pull best-effort.
+# Second large model only when profile chose a distinct coding tag (medium/high).
 if [[ "${CODING_MODEL}" != "${CHAT_MODEL}" ]]; then
-  echo "==> Pulling coding model ${CODING_MODEL} (optional)"
+  echo "==> Pulling coding model ${CODING_MODEL} (optional on small disks)"
   docker compose "${COMPOSE_ARGS[@]}" exec -T ollama ollama pull "${CODING_MODEL}" || \
     echo "WARNING: coding model not pulled — you can add it from /admin later."
+else
+  echo "    Coding uses the same model as chat (${CHAT_MODEL}) — saves RAM on low-end hosts."
 fi
+# Keep the chat model resident so the first user message is not a multi-minute cold load.
+echo "==> Warming ${CHAT_MODEL} (keep_alive forever)"
+curl -fsS --max-time 300 http://127.0.0.1:11434/api/generate \
+  -d "{\"model\":\"${CHAT_MODEL}\",\"prompt\":\"ready\",\"stream\":false,\"keep_alive\":-1,\"options\":{\"num_predict\":2,\"num_ctx\":512}}" \
+  >/dev/null 2>&1 \
+  && echo "    Model warm." \
+  || echo "WARNING: warm failed — first chat may be slow while the model loads."
 
 # 6. Wait for app health, then print a clear first-run checklist.
 if [[ -n "${KNONIX_DOMAIN}" && "${KNONIX_DOMAIN}" != "localhost" ]]; then
@@ -580,13 +667,77 @@ else
   APP_URL="http://localhost:3000"
 fi
 
-echo "==> Waiting for app health at ${APP_URL}/api/knonix/health"
-for _ in $(seq 1 40); do
-  if curl -fsS --max-time 5 "${APP_URL}/api/knonix/health" >/dev/null 2>&1; then
-    break
+# Fetch health JSON even when the public domain cannot hairpin on the install host.
+# Tries public URL first, then 127.0.0.1 with Host/SNI, then container network via docker.
+fetch_health_json() {
+  local url_path="/api/knonix/health" json=""
+  json="$(curl -fsS --max-time 5 "${APP_URL}${url_path}" 2>/dev/null || true)"
+  if [[ -n "${json}" ]]; then
+    printf '%s' "${json}"
+    return 0
+  fi
+  if [[ -n "${KNONIX_DOMAIN}" && "${KNONIX_DOMAIN}" != "localhost" ]]; then
+    json="$(curl -fsSk --max-time 5 \
+      --resolve "${KNONIX_DOMAIN}:443:127.0.0.1" \
+      "https://${KNONIX_DOMAIN}${url_path}" 2>/dev/null || true)"
+    if [[ -n "${json}" ]]; then
+      printf '%s' "${json}"
+      return 0
+    fi
+    json="$(curl -fsSk --max-time 5 \
+      --resolve "${KNONIX_DOMAIN}:80:127.0.0.1" \
+      "http://${KNONIX_DOMAIN}${url_path}" 2>/dev/null || true)"
+    if [[ -n "${json}" ]]; then
+      printf '%s' "${json}"
+      return 0
+    fi
+  fi
+  json="$(curl -fsS --max-time 5 "http://127.0.0.1:3000${url_path}" 2>/dev/null || true)"
+  if [[ -n "${json}" ]]; then
+    printf '%s' "${json}"
+    return 0
+  fi
+  json="$(
+    docker compose "${COMPOSE_ARGS[@]}" exec -T knonixai \
+      wget -qO- --timeout=5 "http://127.0.0.1:3000${url_path}" 2>/dev/null || true
+  )"
+  if [[ -n "${json}" ]]; then
+    printf '%s' "${json}"
+    return 0
+  fi
+  return 1
+}
+
+echo "==> Waiting for app health (ready=true)…"
+health_json=""
+health_ready=""
+health_status=""
+health_auth=""
+for _ in $(seq 1 50); do
+  health_json="$(fetch_health_json || true)"
+  if [[ -n "${health_json}" ]]; then
+    health_status="$(printf '%s' "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || true)"
+    health_ready="$(printf '%s' "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('ready',''))" 2>/dev/null || true)"
+    health_auth="$(printf '%s' "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('checks',{}).get('authConfigured',''))" 2>/dev/null || true)"
+    # Accept true/True/1
+    if [[ "${health_ready}" == "True" || "${health_ready}" == "true" || "${health_ready}" == "1" ]]; then
+      break
+    fi
   fi
   sleep 3
 done
+
+if [[ "${health_ready}" == "True" || "${health_ready}" == "true" || "${health_ready}" == "1" ]]; then
+  echo "    Health OK (status=${health_status}, ready=true, authConfigured=${health_auth})"
+else
+  echo "WARNING: App did not report ready=true yet."
+  echo "         status=${health_status:-unknown} authConfigured=${health_auth:-unknown}"
+  if [[ -n "${health_json}" ]]; then
+    printf '%s\n' "${health_json}" | python3 -m json.tool 2>/dev/null || printf '%s\n' "${health_json}"
+  fi
+  echo "         Check: docker compose ${COMPOSE_ARGS[*]} logs knonixai --tail 80"
+  echo "         Then:  ./scripts/verify-install.sh"
+fi
 
 echo
 echo "==> KnonixAI is up."
@@ -600,6 +751,9 @@ if [[ -n "${KNONIX_DOMAIN}" && "${KNONIX_DOMAIN}" != "localhost" ]]; then
   echo "    First HTTPS request may take a few seconds while Caddy issues the"
   echo "    Let's Encrypt certificate. If it fails, confirm DNS points here and"
   echo "    ports 80+443 are open, then: docker compose ${COMPOSE_ARGS[*]} logs caddy"
+  echo "    Note: from the same LAN, https://${KNONIX_DOMAIN} may hang (router hairpin)."
+  echo "    Test health with: curl -fsSk --resolve ${KNONIX_DOMAIN}:443:127.0.0.1 https://${KNONIX_DOMAIN}/api/knonix/health"
+  echo "    Or test from a phone on cellular, not home Wi‑Fi."
 fi
 echo
 echo "    ========== First-run checklist (required) =========="

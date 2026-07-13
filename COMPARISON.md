@@ -45,7 +45,13 @@
 | **Work per turn** | Agent tools, URL prefetch, RAG, multi-mode research | Often thinner tool loops or pure chat API |
 | **Tradeoff** | Prompts/docs stay in **your boundary** | Speed first; data may leave the box |
 
-**To feel “OpenClaw-fast” on KnonixAI:** enable frontier APIs (Admin) for non-CUI work, or run on a **Jetson Orin / RTX GPU** with a 7–8B tools model. See [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md#nvidia-jetson--can-it-run-knonixai).
+**To feel “OpenClaw-fast” on KnonixAI:**
+
+1. **Low-end default (built-in):** `./install.sh` auto-selects **`qwen2.5:3b`** on CPU / ≤20 GB RAM so chat stays interactive.  
+2. **GPU host:** NVIDIA 12 GB+ with a 7–8B tools model.  
+3. **Non-CUI hybrid:** frontier APIs in Admin for non-sensitive work.
+
+See [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md) and `scripts/hardware-profile.sh`.
 
 ---
 

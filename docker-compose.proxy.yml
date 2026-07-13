@@ -17,7 +17,9 @@ services:
     ports:
       - '80:80'
       - '443:443'
-      - '443:443/udp' # HTTP/3
+      # HTTP/3 (UDP/443) disabled by default: mobile QUIC often times out behind
+      # residential DMZ/NAT. Clients use HTTP/2 over TCP instead.
+      # - '443:443/udp'
     environment:
       KNONIX_DOMAIN: ${KNONIX_DOMAIN:?set KNONIX_DOMAIN in .env}
       KNONIX_ACME_EMAIL: ${KNONIX_ACME_EMAIL:-}
@@ -27,13 +29,19 @@ services:
       - caddy_config:/config
     depends_on:
       - knonixai
-      # license-service is only on the Knonix cloud host (fleet board). Customer
-      # installs call https://ai.knonix.com for licensing — do not depend on it here.
+      # license-service is ONLY on the Knonix fleet host (platform-up.sh).
+      # Customer installs never start it; they call https://ai.knonix.com for
+      # optional seat heartbeats. Do not add a depends_on here.
 
   # When fronted by Caddy, the app should not publish port 3000 on the host.
   # Caddy reaches it over the internal Docker network by service name.
   knonixai:
     ports: !reset []
+    # Server-side fetch to https://$DOMAIN must not hairpin via the public IP
+    # (fails inside Docker on most home DMZs). Map domain to the host gateway
+    # so SSR/auth can reach Caddy on the host :443.
+    extra_hosts:
+      - '${KNONIX_DOMAIN}:host-gateway'
     environment:
       # Tell the app its public origin so absolute URLs / auth callbacks are
       # correct behind the proxy.

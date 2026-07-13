@@ -6,10 +6,12 @@ You do **not** need to be a developer. If you can open a Terminal and paste comm
 
 ## What you need
 
-1. A computer or server (Linux is best; 16 GB RAM recommended, 8 GB minimum)
+1. A computer or server (Linux is best)
+   - **Works on low-end / no GPU:** 4 CPU cores · **8–16 GB RAM** (default model is small and fast)
+   - **Smoother with more RAM or a GPU** — the installer auto-picks model size
 2. **Docker Desktop** (Mac/Windows) or **Docker Engine** (Linux)  
    Download: https://docs.docker.com/get-docker/
-3. About 20–40 GB free disk space for models
+3. About **40 GB** free disk on small machines (more if you install large models later)
 
 ## Install in 3 steps
 
@@ -37,9 +39,12 @@ The script will:
 
 - Start Docker if needed  
 - Create a safe configuration file (`.env`)  
+- **Detect CPU/RAM/GPU** and pick a model that stays interactive on your machine  
 - Download the KnonixAI app  
 - Start the database, AI model server, and website  
-- Pull default local AI models  
+- Pull default local AI models (3B on small CPUs; larger only if you have the resources)  
+
+**Speed tip:** use **Quick** mode for everyday chat. Deep research is heavier on small machines.
 
 ### 3. Open the app
 

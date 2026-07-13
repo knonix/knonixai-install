@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# verify-install.sh — Post-install health + fleet readiness check.
-# Run from the knonixai-install directory after ./install.sh.
+# verify-install.sh — Post-install health + seat-reporting readiness check.
+# Run from the knonixai-install directory after ./install.sh (customer path).
 #
 set -euo pipefail
 
@@ -38,6 +38,48 @@ if ! docker info >/dev/null 2>&1; then
     DOCKER=(sudo docker)
   fi
 fi
+
+echo "-- Install posture (public customer vs Knonix platform) --"
+owner="$(read_env KNONIX_PLATFORM_OWNER)"
+pmode="$(read_env KNONIX_PLATFORM_MODE)"
+admin_tok="$(read_env KNONIX_LICENSE_ADMIN_TOKEN)"
+if [[ "${owner}" == "true" && "${pmode}" == "cloud" ]]; then
+  echo "INFO  Platform host (Knonix fleet + billing). Customers never use this posture."
+  echo "      Fleet board: https://${DOMAIN:-ai.knonix.com}/admin/fleet (admin token)"
+  if [[ -z "${admin_tok}" ]]; then
+    echo "WARN  KNONIX_LICENSE_ADMIN_TOKEN empty — fleet board will refuse operators."
+  else
+    echo "OK    LICENSE_ADMIN_TOKEN set (operator-only)"
+  fi
+else
+  # Public / customer install expectations
+  if [[ "${owner}" == "true" ]]; then
+    echo "FAIL  KNONIX_PLATFORM_OWNER=true — customer installs must stay false."
+    echo "      Re-run ./install.sh or set KNONIX_PLATFORM_OWNER=false"
+    fail=1
+  else
+    echo "OK    PLATFORM_OWNER=false (local software only)"
+  fi
+  if [[ "${pmode}" == "cloud" ]]; then
+    echo "FAIL  KNONIX_PLATFORM_MODE=cloud without PLATFORM_OWNER — invalid."
+    echo "      Customers: sovereign. Platform host: sudo ./scripts/platform-up.sh"
+    fail=1
+  else
+    echo "OK    PLATFORM_MODE=${pmode:-sovereign/default}"
+  fi
+  if [[ -n "${admin_tok}" ]]; then
+    echo "FAIL  KNONIX_LICENSE_ADMIN_TOKEN is set — operator secret must not live on customer installs."
+    echo "      Clear it from .env (fleet board is on the Knonix platform only)."
+    fail=1
+  else
+    echo "OK    LICENSE_ADMIN_TOKEN unset (no fleet admin access)"
+  fi
+  if "${DOCKER[@]}" ps --format '{{.Names}}' 2>/dev/null | grep -q 'license-service'; then
+    echo "WARN  license-service is running on a non-platform posture host."
+    echo "      That service is for Knonix fleet/billing only — not customer installs."
+  fi
+fi
+echo
 
 echo "-- Docker services --"
 if "${DOCKER[@]}" compose ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null; then
@@ -79,11 +121,14 @@ if [[ -n "${DOMAIN}" ]]; then
       echo "WARN  Ports 80/443 not detected listening — HTTPS may fail from the internet"
     fi
   fi
-  # End-to-end HTTPS health (same as users hit)
+  # End-to-end HTTPS health (public URL may fail on LAN hairpin — try resolve too)
   if curl -fsS --max-time 10 "${BASE}/api/knonix/health" >/dev/null 2>&1; then
     echo "OK    HTTPS health responds at ${BASE}/api/knonix/health"
+  elif curl -fsSk --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" \
+      "https://${DOMAIN}/api/knonix/health" >/dev/null 2>&1; then
+    echo "OK    HTTPS health OK via --resolve ${DOMAIN}:443:127.0.0.1 (LAN hairpin)"
   else
-    echo "WARN  ${BASE}/api/knonix/health not reachable yet (cert/DNS may still be issuing)"
+    echo "WARN  ${BASE}/api/knonix/health not reachable yet (cert/DNS/hairpin may still be issuing)"
   fi
 else
   echo "OK    Local mode (no KNONIX_DOMAIN) — app on http://localhost:3000"
@@ -96,6 +141,13 @@ echo
 
 echo "-- App health --"
 health_json="$(curl -fsS --max-time 15 "${BASE}/api/knonix/health" 2>/dev/null || true)"
+if [[ -z "${health_json}" && -n "${DOMAIN}" && "${DOMAIN}" != "localhost" ]]; then
+  health_json="$(curl -fsSk --max-time 15 --resolve "${DOMAIN}:443:127.0.0.1" \
+    "https://${DOMAIN}/api/knonix/health" 2>/dev/null || true)"
+fi
+if [[ -z "${health_json}" ]]; then
+  health_json="$(curl -fsS --max-time 10 "http://127.0.0.1:3000/api/knonix/health" 2>/dev/null || true)"
+fi
 if [[ -z "${health_json}" ]]; then
   echo "FAIL  ${BASE}/api/knonix/health did not respond"
   fail=1
@@ -103,12 +155,23 @@ else
   echo "${health_json}" | python3 -m json.tool 2>/dev/null || echo "${health_json}"
   status="$(echo "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || true)"
   ready="$(echo "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('ready',''))" 2>/dev/null || true)"
-  if [[ "${status}" != "ok" && "${status}" != "degraded" ]]; then
+  auth_cfg="$(echo "${health_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('checks',{}).get('authConfigured',''))" 2>/dev/null || true)"
+  if [[ "${status}" != "ok" ]]; then
+    echo "FAIL  health status is '${status}' (want ok)"
     fail=1
   fi
-  # Prefer structured ready flag when present
-  if [[ "${ready}" == "False" || "${ready}" == "false" ]]; then
+  if [[ "${ready}" == "False" || "${ready}" == "false" || -z "${ready}" ]]; then
+    echo "FAIL  health ready is not true"
     fail=1
+  else
+    echo "OK    ready=true"
+  fi
+  if [[ "${auth_cfg}" == "False" || "${auth_cfg}" == "false" ]]; then
+    echo "FAIL  authConfigured=false — Supabase keys missing or image health bug"
+    echo "      Confirm NEXT_PUBLIC_SUPABASE_* in .env; ensure scripts/knonix-entrypoint.sh is mounted"
+    fail=1
+  else
+    echo "OK    authConfigured=true"
   fi
 fi
 echo
@@ -136,7 +199,7 @@ echo "    KNONIX_HEARTBEAT_SECRET set: $([[ -n "${hb}" ]] && echo yes || echo NO
 
 if [[ "${mode}" == "connected" ]]; then
   if [[ -z "${token}" ]]; then
-    echo "WARN  Connected mode without fleet token — seats will NOT report to Knonix."
+    echo "WARN  Connected mode without enrollment token — seats will NOT report to Knonix for billing."
     echo "      Set KNONIX_LICENSE_SERVICE_TOKEN from your Knonix license email, then:"
     echo "      docker compose up -d knonixai heartbeat-cron"
     fail=1
@@ -146,7 +209,7 @@ if [[ "${mode}" == "connected" ]]; then
     fail=1
   else
     echo
-    echo "-- Heartbeat probe (local) --"
+    echo "-- Heartbeat probe (local → optional outbound seat report to Knonix) --"
     hb_out="$(curl -fsS --max-time 20 -X POST "${BASE}/api/knonix/heartbeat" \
       -H "Authorization: Bearer ${hb}" \
       -H 'Content-Type: application/json' -d '{}' 2>/dev/null || true)"

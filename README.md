@@ -7,6 +7,12 @@ open-weight models run inside your boundary, so your data never has to leave.
 > This installer pulls a **prebuilt public image** from the GitHub Container
 > Registry (GHCR). You do **not** need access to the KnonixAI source code, and
 > **no token or login is required** to pull the image.
+>
+> **Customer installs stay clean:** `./install.sh` never enables platform/fleet
+> owner mode, never requires a `:local` image, and always verifies
+> `/api/knonix/health` reports `ready=true` (including auth). See
+> [image-build/README.md](./image-build/README.md) for how maintainers publish
+> bug-free app images.
 
 | Doc | Audience |
 |-----|----------|
@@ -14,12 +20,14 @@ open-weight models run inside your boundary, so your data never has to leave.
 | **[EASY_SETUP.md](./EASY_SETUP.md)** | Non-technical install (3 steps + first-day checklist) |
 | **[FEATURES.md](./FEATURES.md)** | Full product features (Spaces, SKILL.md, productivity, connectors, …) |
 | **[COMPARISON.md](./COMPARISON.md)** | **Buyers — vs Copilot, ChatGPT, Claude, Glean, Perplexity, OpenClaw, Cursor** |
+| **[docs/OPENSOURCE_LEARNINGS.md](./docs/OPENSOURCE_LEARNINGS.md)** | **Engineering — lessons from Open WebUI, LibreChat, AnythingLLM, Dify** |
 | **[CMMC_COMPLIANCE.md](./CMMC_COMPLIANCE.md)** | **CMMC / DFARS / NIST mapping, readiness runbook, competitive matrix** |
 | **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)** | **Hardware tiers, GPU sizing, NVIDIA Jetson** |
 | **[MIGRATION.md](./MIGRATION.md)** | **Move install to a larger host (`migrate.sh`)** |
 | **[TERMS_OF_USE.md](./TERMS_OF_USE.md)** | **Legal terms — use at your own risk; liability limits** |
 | **[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)** | **Privacy — self-hosted data stays with you** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
+| **[docs/PUBLIC_VS_PLATFORM.md](./docs/PUBLIC_VS_PLATFORM.md)** | **Public vs Knonix fleet — who sees installs & seats for billing** |
 
 ---
 
@@ -74,6 +82,16 @@ cd knonixai-install
 ./install.sh
 ```
 
+This pulls the **public** prebuilt image `ghcr.io/knonix/knonixai:latest` (no
+source access, no login for the default package). Set `KNONIX_IMAGE_TAG` in
+`.env` only if you need a pinned release.
+
+**Customers never run** `docker-compose.platform.yml` or `scripts/platform-up.sh`.
+Those are **Knonix-only** (fleet board + billing). Your public install is local
+software only; if you paste an enrollment token, it **sends** optional seat
+heartbeats to Knonix for accurate billing — you never access fleet/licensing
+systems beyond your own `/admin`. Details: **[docs/PUBLIC_VS_PLATFORM.md](./docs/PUBLIC_VS_PLATFORM.md)**.
+
 Non-technical walkthrough: **[EASY_SETUP.md](./EASY_SETUP.md)**.
 
 ### Wizard prompts
@@ -109,7 +127,15 @@ curl -fsS http://localhost:3000/api/knonix/health   # or https://your-domain/...
 
 # LLM tools check (research chat requires Ollama "tools" capability)
 ./scripts/verify-ollama-llms.sh --catalog
+
+# Optional API chat smoke (creates an ephemeral test user)
+./scripts/qa-chat-smoke.sh
 ```
+
+**How knowledge works:** the app does not permanently retrain from chat. It uses
+conversation context, **local RAG** (uploads), and Space **MEMORY.md / vault**.
+For precise policy answers, upload source docs or share URLs. See
+[docs/OPENSOURCE_LEARNINGS.md](./docs/OPENSOURCE_LEARNINGS.md).
 
 **Important:** Models like **phi4:14b** only support completion — they **cannot** run search/connectors/research. Use **qwen3:8b** (default) or any tag where `ollama show <tag>` lists `tools`.
 

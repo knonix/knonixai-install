@@ -1,4 +1,4 @@
-# KnonixAI reverse proxy (Caddy)
+# KnonixAI reverse proxy (Caddy) — CUSTOMER installs
 #
 # Automatic HTTPS via Let's Encrypt. Caddy provisions and renews certificates
 # for {$KNONIX_DOMAIN} automatically on first request. No port numbers, no
@@ -12,6 +12,9 @@
 #
 # For local testing without a real domain, set KNONIX_DOMAIN=localhost — Caddy
 # then serves HTTPS with a locally-trusted internal CA (no Let's Encrypt).
+#
+# Platform fleet host (ai.knonix.com only): use Caddyfile.platform via
+# docker-compose.platform.yml — not this file.
 
 {
 	email {$KNONIX_ACME_EMAIL}
@@ -21,7 +24,13 @@
 }
 
 {$KNONIX_DOMAIN} {
-	encode zstd gzip
+	# NEVER gzip/zstd SSE/chat streams — compression buffers until the model
+	# finishes, so the UI looks like chat "never answers" on CPU hosts.
+	@compressible {
+		not path /api/chat* /api/coding* /api/knonix/models/pull*
+		not header Content-Type *text/event-stream*
+	}
+	encode @compressible zstd gzip
 
 	# Self-hosted auth gateway (GoTrue via Kong). Requests to
 	# https://{$KNONIX_DOMAIN}/supabase/* are forwarded to Kong with the
@@ -30,16 +39,6 @@
 	# route is harmless if the Kong service isn't running.
 	handle_path /supabase/* {
 		reverse_proxy supabase-kong:8000
-	}
-
-	# Central License Service (fleet metering + billing). Customer installs
-	# call these endpoints; the Next.js app never handles /v1/* itself.
-	handle /v1/* {
-		reverse_proxy license-service:8787
-	}
-
-	handle /healthz {
-		reverse_proxy license-service:8787
 	}
 
 	# Model pulls stream for a long time — disable proxy buffering/timeouts.
