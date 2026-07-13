@@ -54,17 +54,28 @@ curl -fsS http://localhost:3000/api/knonix/health | jq .
 # expect: "status":"ok", "ready":true, "checks.authConfigured":true
 ```
 
-## Publish patched image without full monorepo rebuild
+## Publish customer image (preferred)
 
-If you cannot rebuild from source yet but can push to GHCR:
+From the **install repo root**:
 
 ```bash
-# Requires: docker login ghcr.io  (write:packages on knonix/knonixai)
-./image-build/publish-fixed-image.sh
+# Requires: docker login ghcr.io  (write:packages)
+PUSH=true ./scripts/release.sh          # uses VERSION file
+# or bump first:
+PUSH=true ./scripts/release.sh 1.6.1
 ```
 
-This builds `FROM ghcr.io/knonix/knonixai:latest`, bakes the same health patch
-into the image layers, and tags/pushes `:latest` (and a dated tag).
+This:
+
+1. Builds `FROM ghcr.io/knonix/knonixai:latest` (or local base)
+2. Bakes health auth fix + full `knonix-entrypoint.sh` into the image
+3. Tags `vX.Y.Z`, `latest`, and `installer-X.Y.Z`
+4. Pushes when `PUSH=true`
+
+Back-compat: `./image-build/publish-fixed-image.sh` calls `scripts/release.sh`.
+
+Also update **CHANGELOG.md** and push the installer repo so
+`./scripts/check-updates.sh` can notify customers.
 
 ## Customer path (must stay clean)
 

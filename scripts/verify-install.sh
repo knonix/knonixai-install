@@ -223,10 +223,29 @@ if [[ "${mode}" == "connected" ]]; then
 fi
 
 echo
+echo "-- Updates --"
+if [[ -f VERSION ]]; then
+  echo "    Installer VERSION: $(tr -d '[:space:]' < VERSION)"
+fi
+if [[ -x ./scripts/check-updates.sh ]]; then
+  # Non-fatal: exit 2 means updates available
+  set +e
+  ./scripts/check-updates.sh
+  upd=$?
+  set -e
+  if [[ "${upd}" -eq 2 ]]; then
+    echo "    (Update available — see CHANGELOG.md; not a failure for this check.)"
+  fi
+else
+  echo "    Tip: run ./scripts/check-updates.sh periodically"
+fi
+
+echo
 if [[ "${fail}" -eq 0 ]]; then
   echo "==> Verification PASSED"
   echo "    Next: open ${BASE}/auth/sign-up → create the first admin account"
   echo "          then open ${BASE}/admin to confirm license + models."
+  echo "    Later: ./scripts/check-updates.sh when you want the newest image."
   exit 0
 else
   echo "==> Verification found issues (see WARN/FAIL above)."

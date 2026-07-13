@@ -2,7 +2,7 @@
 
 You do **not** need to be a developer. If you can open a Terminal and paste commands, you can install KnonixAI.
 
-**Related docs:** [README](./README.md) · [FEATURES.md](./FEATURES.md) · [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) · [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)
+**Related docs:** [README](./README.md) · [CHANGELOG.md](./CHANGELOG.md) · [FEATURES.md](./FEATURES.md) · [INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md) · [SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)
 
 ## What you need
 
@@ -104,3 +104,25 @@ You never need to build the app from source for a normal customer install.
 
 By installing KnonixAI you agree to the **[Terms of Use](./TERMS_OF_USE.md)** (use at your own risk; you are responsible for security and backups).  
 Privacy: **[Privacy Policy](./PRIVACY_POLICY.md)**.
+
+## Keeping KnonixAI up to date
+
+Knonix publishes new **installer** versions and **app images**. To see if you need an update:
+
+```bash
+cd knonixai-install
+./scripts/check-updates.sh
+```
+
+If an update is available:
+
+```bash
+git pull origin main
+cat CHANGELOG.md | head -60
+docker compose pull
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml --profile auth up -d
+```
+
+Then refresh your browser (Ctrl+Shift+R / Cmd+Shift+R).
+
+The **CHANGELOG.md** file lists what changed in each version.

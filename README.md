@@ -28,6 +28,11 @@ open-weight models run inside your boundary, so your data never has to leave.
 | **[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)** | **Privacy — self-hosted data stays with you** |
 | **[INSTALL_SETTINGS.md](./INSTALL_SETTINGS.md)** | Every `.env` setting explained |
 | **[docs/PUBLIC_VS_PLATFORM.md](./docs/PUBLIC_VS_PLATFORM.md)** | **Public vs Knonix fleet — who sees installs & seats for billing** |
+| **[CHANGELOG.md](./CHANGELOG.md)** | **What changed — upgrade notes for each version** |
+| **[docs/PUSH_TO_GITHUB_AND_GHCR.md](./docs/PUSH_TO_GITHUB_AND_GHCR.md)** | Maintainers — reconnect GitHub / publish images |
+| **[docs/SECURITY_AND_OPS_AUDIT.md](./docs/SECURITY_AND_OPS_AUDIT.md)** | Security surface and ops checklist |
+
+**Current installer version:** see [`VERSION`](./VERSION) · check for updates: `./scripts/check-updates.sh`
 
 ---
 
@@ -125,12 +130,31 @@ When it finishes:
 ./scripts/verify-install.sh
 curl -fsS http://localhost:3000/api/knonix/health   # or https://your-domain/...
 
+# Check for newer installer or app image
+./scripts/check-updates.sh
+
 # LLM tools check (research chat requires Ollama "tools" capability)
 ./scripts/verify-ollama-llms.sh --catalog
 
 # Optional API chat smoke (creates an ephemeral test user)
 ./scripts/qa-chat-smoke.sh
 ```
+
+### Stay updated (companies / operators)
+
+When Knonix publishes a new installer or `ghcr.io/knonix/knonixai` image:
+
+```bash
+cd knonixai-install
+git pull origin main
+./scripts/check-updates.sh          # shows VERSION + image status
+cat CHANGELOG.md | head -80         # what changed
+docker compose pull
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml --profile auth up -d
+# Hard-refresh the browser (Ctrl+Shift+R)
+```
+
+Maintainers publish with `./scripts/release.sh` (see **[docs/PUSH_TO_GITHUB_AND_GHCR.md](./docs/PUSH_TO_GITHUB_AND_GHCR.md)**).
 
 **How knowledge works:** the app does not permanently retrain from chat. It uses
 conversation context, **local RAG** (uploads), and Space **MEMORY.md / vault**.

@@ -1,0 +1,28 @@
+# Customer release image: base app + baked health fix + full knonix entrypoint.
+# Built by scripts/release.sh (context = image-build/context).
+ARG BASE_IMAGE=ghcr.io/knonix/knonixai:latest
+FROM ${BASE_IMAGE}
+
+ARG KNONIX_INSTALLER_VERSION=0.0.0
+LABEL org.opencontainers.image.vendor="Knonix" \
+      org.opencontainers.image.version="${KNONIX_INSTALLER_VERSION}" \
+      org.opencontainers.image.description="KnonixAI self-hosted app image"
+
+USER root
+
+# 1) Bake static health auth patch (NEXT_PUBLIC empty at build)
+COPY patch-health-auth.cjs /tmp/patch-health-auth.cjs
+RUN node /tmp/patch-health-auth.cjs && rm -f /tmp/patch-health-auth.cjs
+
+# 2) Bake full runtime entrypoint (related follow-ups, URL chips, resources rail, …)
+# Installer may still mount an updated script over this path for hotfixes.
+RUN mkdir -p /knonix-scripts
+COPY knonix-entrypoint.sh /knonix-scripts/knonix-entrypoint.sh
+RUN chmod +x /knonix-scripts/knonix-entrypoint.sh \
+    && printf '%s\n' "${KNONIX_INSTALLER_VERSION}" > /knonix-scripts/INSTALLER_VERSION
+
+ENV KNONIX_INSTALLER_VERSION=${KNONIX_INSTALLER_VERSION}
+
+# Default to patched entrypoint so customers get fixes even without compose mount
+ENTRYPOINT ["/bin/sh", "/knonix-scripts/knonix-entrypoint.sh"]
+CMD ["npx", "next", "start", "-H", "0.0.0.0"]
