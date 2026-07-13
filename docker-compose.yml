@@ -27,6 +27,7 @@ services:
     image: ghcr.io/knonix/knonixai:${KNONIX_IMAGE_TAG:-latest}
     # "local" tags are built on this host — do not try to pull them from GHCR.
     pull_policy: ${KNONIX_IMAGE_PULL_POLICY:-always}
+    restart: unless-stopped
     # Runtime patch for Next.js health check (NEXT_PUBLIC_* empty at image build).
     # No-op once the published image ships the fixed health route. See
     # scripts/knonix-entrypoint.sh and image-build/ for the permanent image fix.
@@ -127,6 +128,7 @@ services:
   # (or use the admin dashboard's one-click model pull at /admin).
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     ports:
       - '${OLLAMA_PORT:-11434}:11434'
     volumes:
@@ -151,6 +153,7 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-knonixai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knonixai}
@@ -171,6 +174,7 @@ services:
 
   redis:
     image: redis:alpine
+    restart: unless-stopped
     ports:
       - '6379:6379'
     volumes:
@@ -179,6 +183,7 @@ services:
 
   searxng:
     image: searxng/searxng
+    restart: unless-stopped
     ports:
       - '${SEARXNG_PORT:-8080}:8080'
     env_file: .env
@@ -285,7 +290,8 @@ services:
     profiles: ['auth']
     depends_on:
       supabase-auth:
-        condition: service_started
+        # Wait until GoTrue is up (after postgres healthy) so reboot is reliable
+        condition: service_healthy
     ports:
       - '${KNONIX_AUTH_KONG_HTTP_PORT:-8000}:8000'
       - '${KNONIX_AUTH_KONG_HTTPS_PORT:-8443}:8443'

@@ -34,7 +34,10 @@ function patchFile(file, oldStr, newStr, label) {
   } catch {
     return false;
   }
-  if (data.includes(newStr)) {
+  // Only treat as "already applied" when the NEW marker is unique enough
+  // (short replacements like "null" appear everywhere and would false-positive).
+  const uniqueEnough = newStr.length >= 24 || newStr.includes("Knonix") || newStr.includes("knonix-");
+  if (uniqueEnough && data.includes(newStr) && !data.includes(oldStr)) {
     console.log(`[knonix-entrypoint] ${label}: already applied (${path.basename(file)})`);
     return true;
   }
@@ -160,6 +163,144 @@ const ENSURE_RELATED_FN =
     console.log(
       `[knonix-entrypoint] related-followups: save=${saveOk} ui=${uiOk}`
     );
+  }
+}
+
+// --- 5) Thinking dots cleanup: only ONE bounce-dot group (activity header) ---
+// List rows previously also rendered bounce dots + spin icons per active step.
+{
+  const dotPatches = [
+    // Static client: remove per-row bounce dots next to labels (header keeps the only dots)
+    {
+      label: "thinking-dots-row-static",
+      old: '"active"===e.status?(0,i.jsx)(j,{size:"sm",className:"text-primary"}):null',
+      new: '/*knonix-one-think-dots*/null',
+    },
+    // Static client: replace per-row spin loader with a quiet solid marker
+    {
+      label: "thinking-spin-row-static",
+      old: '"active"===e.status?(0,i.jsx)(h,{className:(0,o.cn)("size-4 animate-spin text-primary",t)})',
+      new: '"active"===e.status?(0,i.jsx)("span",{className:(0,o.cn)("mt-1 block size-2 rounded-full bg-primary knonix-step-dot",t),"aria-hidden":!0})',
+    },
+    // SSR: remove per-row bounce dots
+    {
+      label: "thinking-dots-row-ssr",
+      old: '"active"===a.status?(0,g.jsx)(u,{size:"sm",className:"text-primary"}):null',
+      new: '/*knonix-one-think-dots*/null',
+    },
+    // SSR: quiet solid marker instead of spin
+    {
+      label: "thinking-spin-row-ssr",
+      old: '"active"===a.status?(0,g.jsx)(o,{className:(0,i.cn)("size-4 animate-spin text-primary",b)})',
+      new: '"active"===a.status?(0,g.jsx)("span",{className:(0,i.cn)("mt-1 block size-2 rounded-full bg-primary knonix-step-dot",b),"aria-hidden":!0})',
+    },
+  ];
+  let dotsOk = false;
+  for (const { label, old, new: neu } of dotPatches) {
+    for (const f of allFiles) {
+      if (patchFile(f, old, neu, label)) dotsOk = true;
+    }
+  }
+  if (!dotsOk) console.log("[knonix-entrypoint] thinking-dots: patterns not found");
+}
+
+// --- 6) Chat resources rail (links / files / artifacts) — right side, collapsible ---
+// Collects visitedSources, tool search/fetch URLs, uploads, and shows them per chat.
+{
+  // Resource collector + collapsible rail (uses ChatMessages module aliases: t=jsx,s=react,n=cn)
+  const RAIL_FN_STATIC =
+    'function KnonixResourcesRail({sections:e}){let[a,r]=(0,s.useState)(!0),i=(0,s.useMemo)(()=>{let t=[],l=[],o=new Set;function c(e,s){if(!e||o.has(e))return;try{new URL(e)}catch{return}o.add(e),t.push({url:e,title:(s||e).slice(0,120)})}function d(e,s,a){l.push({name:e||"File",url:s||"",kind:a||"file"})}for(let s of e||[]){let a=s.userMessage;if(a?.parts)for(let e of a.parts){if("file"===e.type)d(e.filename||e.name,e.url,"upload");if("text"===e.type&&"string"==typeof e.text){let s=e.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let e of s)c(e.replace(/[.,;:]+$/,""),e)}}for(let a of s.assistantMessages||[]){if(Array.isArray(a.metadata?.visitedSources))for(let e of a.metadata.visitedSources)e?.url&&c(e.url,e.title);if(a.parts)for(let e of a.parts){if("tool-search"===e.type&&e.output?.results)for(let s of e.output.results)c(s.url||s.link,s.title);if("tool-fetch"===e.type){let s=e.input?.url||e.output?.url||e.output?.results?.[0]?.url;s&&c(s,e.output?.results?.[0]?.title||s)}if("file"===e.type)d(e.filename||e.name,e.url,"file");if(e.type&&String(e.type).includes("office")||"data-officeDocument"===e.type)d(e.data?.filename||e.filename||"Document",e.data?.url||e.url||"","artifact");if("text"===e.type&&"string"==typeof e.text){let s=e.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let e of s)c(e.replace(/[.,;:]+$/,""),e)}}}}return{links:t,files:l}},[e]),l=i.links.length+i.files.length;if(0===l)return null;return(0,t.jsxs)("aside",{className:(0,n.cn)("knonix-resources-rail hidden md:flex shrink-0 flex-col border-l bg-card/40 backdrop-blur-sm transition-[width] duration-200",a?"w-72":"w-10"),"aria-label":"Chat resources",children:[(0,t.jsxs)("button",{type:"button",onClick:()=>r(e=>!e),className:"flex h-11 items-center gap-2 border-b px-2 text-xs font-medium text-muted-foreground hover:text-foreground",title:a?"Collapse resources":"Expand resources",children:[(0,t.jsx)("span",{className:"inline-flex size-6 items-center justify-center rounded-md border bg-background text-[11px]",children:a?"»":"«"}),(0,t.jsx)("span",{className:(0,n.cn)("truncate",!a&&"sr-only"),children:`Resources (${l})`})]}),a?(0,t.jsxs)("div",{className:"min-h-0 flex-1 space-y-4 overflow-y-auto p-3 text-sm",children:[i.files.length?(0,t.jsxs)("div",{children:[(0,t.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Files & artifacts"}),(0,t.jsx)("ul",{className:"space-y-1.5",children:i.files.map((e,s)=>(0,t.jsx)("li",{className:"rounded-md border bg-background/80 px-2 py-1.5",children:e.url?(0,t.jsx)("a",{href:e.url,target:"_blank",rel:"noopener noreferrer",className:"block truncate text-primary hover:underline",children:e.name}):(0,t.jsx)("span",{className:"truncate",children:e.name})},s))}]}):null,i.links.length?(0,t.jsxs)("div",{children:[(0,t.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Links & sources"}),(0,t.jsx)("ul",{className:"space-y-1.5",children:i.links.slice(0,40).map((e,s)=>(0,t.jsx)("li",{children:(0,t.jsxs)("a",{href:e.url,target:"_blank",rel:"noopener noreferrer",className:"block rounded-md border bg-background/80 px-2 py-1.5 hover:border-primary/40",children:[(0,t.jsx)("span",{className:"line-clamp-2 text-foreground",children:e.title}),(0,t.jsx)("span",{className:"mt-0.5 block truncate text-[11px] text-muted-foreground",children:e.url.replace(/^https?:\\/\\//,"")})]})},s))}]}):null,0===l?(0,t.jsx)("p",{className:"text-xs text-muted-foreground",children:"Links, files, and sources from this chat appear here."}):null]}):null])}';
+
+  // SSR module uses g=jsx, h=react, i=cn
+  const RAIL_FN_SSR =
+    'function KnonixResourcesRail({sections:a}){let[b,c]=(0,h.useState)(!0),d=(0,h.useMemo)(()=>{let e=[],f=[],g=new Set;function i(a,b){if(!a||g.has(a))return;try{new URL(a)}catch{return}g.add(a),e.push({url:a,title:(b||a).slice(0,120)})}function j(a,b,c){f.push({name:a||"File",url:b||"",kind:c||"file"})}for(let b of a||[]){let c=b.userMessage;if(c?.parts)for(let a of c.parts){if("file"===a.type)j(a.filename||a.name,a.url,"upload");if("text"===a.type&&"string"==typeof a.text){let b=a.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let a of b)i(a.replace(/[.,;:]+$/,""),a)}}for(let c of b.assistantMessages||[]){if(Array.isArray(c.metadata?.visitedSources))for(let a of c.metadata.visitedSources)a?.url&&i(a.url,a.title);if(c.parts)for(let a of c.parts){if("tool-search"===a.type&&a.output?.results)for(let b of a.output.results)i(b.url||b.link,b.title);if("tool-fetch"===a.type){let b=a.input?.url||a.output?.url||a.output?.results?.[0]?.url;b&&i(b,a.output?.results?.[0]?.title||b)}if("file"===a.type)j(a.filename||a.name,a.url,"file");if(a.type&&String(a.type).includes("office")||"data-officeDocument"===a.type)j(a.data?.filename||a.filename||"Document",a.data?.url||a.url||"","artifact");if("text"===a.type&&"string"==typeof a.text){let b=a.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let a of b)i(a.replace(/[.,;:]+$/,""),a)}}}}return{links:e,files:f}},[a]),e=d.links.length+d.files.length;if(0===e)return null;return(0,g.jsxs)("aside",{className:(0,i.cn)("knonix-resources-rail hidden md:flex shrink-0 flex-col border-l bg-card/40 backdrop-blur-sm transition-[width] duration-200",b?"w-72":"w-10"),"aria-label":"Chat resources",children:[(0,g.jsxs)("button",{type:"button",onClick:()=>c(a=>!a),className:"flex h-11 items-center gap-2 border-b px-2 text-xs font-medium text-muted-foreground hover:text-foreground",title:b?"Collapse resources":"Expand resources",children:[(0,g.jsx)("span",{className:"inline-flex size-6 items-center justify-center rounded-md border bg-background text-[11px]",children:b?"»":"«"}),(0,g.jsx)("span",{className:(0,i.cn)("truncate",!b&&"sr-only"),children:`Resources (${e})`})]}),b?(0,g.jsxs)("div",{className:"min-h-0 flex-1 space-y-4 overflow-y-auto p-3 text-sm",children:[d.files.length?(0,g.jsxs)("div",{children:[(0,g.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Files & artifacts"}),(0,g.jsx)("ul",{className:"space-y-1.5",children:d.files.map((a,b)=>(0,g.jsx)("li",{className:"rounded-md border bg-background/80 px-2 py-1.5",children:a.url?(0,g.jsx)("a",{href:a.url,target:"_blank",rel:"noopener noreferrer",className:"block truncate text-primary hover:underline",children:a.name}):(0,g.jsx)("span",{className:"truncate",children:a.name})},b))}]}):null,d.links.length?(0,g.jsxs)("div",{children:[(0,g.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Links & sources"}),(0,g.jsx)("ul",{className:"space-y-1.5",children:d.links.slice(0,40).map((a,b)=>(0,g.jsx)("li",{children:(0,g.jsxs)("a",{href:a.url,target:"_blank",rel:"noopener noreferrer",className:"block rounded-md border bg-background/80 px-2 py-1.5 hover:border-primary/40",children:[(0,g.jsx)("span",{className:"line-clamp-2 text-foreground",children:a.title}),(0,g.jsx)("span",{className:"mt-0.5 block truncate text-[11px] text-muted-foreground",children:a.url.replace(/^https?:\\/\\//,"")})]})},b))}]}):null]}):null]})}';
+
+  // Inject rail function + wrap ChatMessages return (static)
+  const OLD_CM_STATIC =
+    '["ChatMessages",0,function({sections:e,status:m,chatId:p,isGuest:h=!1,isCloudDeployment:x=!1,libraryAvailable:g=!0,addToolResult:f,scrollContainerRef:b,onUpdateMessage:v,reload:j,error:y,onQuoteContext:w}){';
+  const NEW_CM_STATIC =
+    '["ChatMessages",0,function({sections:e,status:m,chatId:p,isGuest:h=!1,isCloudDeployment:x=!1,libraryAvailable:g=!0,addToolResult:f,scrollContainerRef:b,onUpdateMessage:v,reload:j,error:y,onQuoteContext:w}){' +
+    RAIL_FN_STATIC;
+
+  const OLD_RET_STATIC =
+    'return(0,t.jsx)("div",{id:"scroll-container",ref:b,role:"list","aria-roledescription":"chat messages",className:(0,n.cn)("relative size-full min-w-0 pt-12 sm:pt-14",e.length>0?"flex-1 overflow-y-auto overscroll-contain":""),children:(0,t.jsx)("div",{className:"relative mx-auto w-full min-w-0 max-w-full px-3 sm:px-4 md:max-w-3xl",children:e.map';
+  const NEW_RET_STATIC =
+    'return(0,t.jsxs)("div",{className:"flex size-full min-h-0 min-w-0",children:[(0,t.jsx)("div",{id:"scroll-container",ref:b,role:"list","aria-roledescription":"chat messages",className:(0,n.cn)("relative min-w-0 flex-1 pt-12 sm:pt-14",e.length>0?"overflow-y-auto overscroll-contain":""),children:(0,t.jsx)("div",{className:"relative mx-auto w-full min-w-0 max-w-full px-3 sm:px-4 md:max-w-3xl",children:e.map';
+
+  // Close map + max-w column, then sibling resources rail, then flex row.
+  // Original: s.id))})})}],510724
+  // Wrapped:  s.id))})}),RAIL])}],510724
+  const OLD_END_STATIC =
+    'A&&a===e.length-1&&(0,t.jsxs)("div",{className:"flex items-center gap-3 py-1 md:py-4",children:[(0,t.jsx)(l.AnimatedLogo,{className:"size-10 shrink-0",animate:C}),C?null:(0,t.jsx)(d.ChatFooterMessage,{isLoading:!1})]}),a===e.length-1&&(0,t.jsx)(c.ChatError,{error:y,onRetry:j&&e.length>0?()=>{let t=e[e.length-1]?.userMessage;t?.id&&j(t.id)}:void 0})]},s.id))})})}],510724';
+  const NEW_END_STATIC =
+    'A&&a===e.length-1&&(0,t.jsxs)("div",{className:"flex items-center gap-3 py-1 md:py-4",children:[(0,t.jsx)(l.AnimatedLogo,{className:"size-10 shrink-0",animate:C}),C?null:(0,t.jsx)(d.ChatFooterMessage,{isLoading:!1})]}),a===e.length-1&&(0,t.jsx)(c.ChatError,{error:y,onRetry:j&&e.length>0?()=>{let t=e[e.length-1]?.userMessage;t?.id&&j(t.id)}:void 0})]},s.id))})}),(0,t.jsx)(KnonixResourcesRail,{sections:e})])}],510724';
+
+  let railOk = false;
+  for (const f of allFiles) {
+    if (
+      patchFile(f, OLD_CM_STATIC, NEW_CM_STATIC, "resources-rail-fn-static") &&
+      patchFile(f, OLD_RET_STATIC, NEW_RET_STATIC, "resources-rail-wrap-static")
+    ) {
+      // end patch is required for valid JSX tree
+      if (patchFile(f, OLD_END_STATIC, NEW_END_STATIC, "resources-rail-end-static"))
+        railOk = true;
+    }
+  }
+
+  // SSR ChatMessages — discover exact signatures if present
+  const ssrCm = allFiles.filter(
+    (f) =>
+      f.includes("/ssr/") &&
+      (() => {
+        try {
+          return fs.readFileSync(f, "utf8").includes('["ChatMessages"');
+        } catch {
+          return false;
+        }
+      })()
+  );
+  for (const f of ssrCm) {
+    let data = fs.readFileSync(f, "utf8");
+    // SSR aliases: g=jsx, h=react, i=cn — inject rail if ChatMessages exists with sections:a
+    if (
+      data.includes('["ChatMessages",0,function({sections:a') &&
+      !data.includes("KnonixResourcesRail")
+    ) {
+      const oldStart =
+        '["ChatMessages",0,function({sections:a,status:b,chatId:c,isGuest:d=!1,isCloudDeployment:e=!1,libraryAvailable:f=!0,addToolResult:j,scrollContainerRef:k,onUpdateMessage:l,reload:m,error:n,onQuoteContext:o}){';
+      // Try looser match
+      const m = data.match(
+        /\["ChatMessages",0,function\(\{sections:[a-z],status:[a-z]/
+      );
+      if (m) {
+        // Inject function after opening brace of ChatMessages if not already
+        const insertAt = data.indexOf(m[0]);
+        if (insertAt >= 0) {
+          const brace = data.indexOf("{", insertAt + m[0].length - 1);
+          // find first { of function body after params
+          const bodyStart = data.indexOf("){", insertAt);
+          if (bodyStart > 0 && !data.includes("function KnonixResourcesRail")) {
+            data =
+              data.slice(0, bodyStart + 2) +
+              RAIL_FN_SSR +
+              data.slice(bodyStart + 2);
+            fs.writeFileSync(f, data);
+            console.log(
+              `[knonix-entrypoint] resources-rail-fn-ssr: patched ${path.basename(f)}`
+            );
+            railOk = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (!railOk) {
+    console.log(
+      "[knonix-entrypoint] resources-rail: static wrap may need manual verify; partial ok if dots fixed"
+    );
+  } else {
+    console.log("[knonix-entrypoint] resources-rail: applied");
   }
 }
 NODE
