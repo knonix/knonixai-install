@@ -173,7 +173,7 @@ if [[ -z "${PG_PASS_NOW}" || "${PG_PASS_NOW}" == "change-me-in-production" || "$
 fi
 FLEET_TOKEN_NOW="$(read_env KNONIX_LICENSE_SERVICE_TOKEN)"
 LICENSE_MODE_NOW="$(read_env KNONIX_LICENSE_MODE)"
-LICENSE_MODE_NOW="${LICENSE_MODE_NOW:-connected}"
+LICENSE_MODE_NOW="${LICENSE_MODE_NOW:-offline}"
 
 if [[ -t 0 ]]; then
   echo
@@ -200,25 +200,33 @@ if [[ -t 0 ]]; then
   fi
 
   echo
-  echo "    Seat reporting for billing (optional, connected mode):"
-  echo "    Your install stays fully local. If you paste the enrollment token from"
-  echo "    Knonix, a daily privacy-preserving heartbeat reports ONLY seat count"
-  echo "    (no chat content, no user PII) so Knonix can bill accurately."
-  echo "    You do NOT get access to any Knonix fleet or licensing console."
-  echo "    Leave blank for free/local-only (no reporting to Knonix)."
-  NEW_TOKEN="$(prompt_value "KNONIX_LICENSE_SERVICE_TOKEN (enrollment from Knonix)" "${FLEET_TOKEN_NOW}")"
+  echo "    Licensing (default OFFLINE — no outbound seat reporting):"
+  echo "    Connected mode: optional daily heartbeat of seat count only (no chat/PII)"
+  echo "    to Knonix for billing. Leave blank for offline/local (recommended for GCC High)."
+  echo "    You do NOT get a fleet console either way."
+  NEW_TOKEN="$(prompt_value "KNONIX_LICENSE_SERVICE_TOKEN (blank = offline)" "${FLEET_TOKEN_NOW}")"
   if [[ -n "${NEW_TOKEN}" ]]; then
     set_env KNONIX_LICENSE_SERVICE_TOKEN "${NEW_TOKEN}"
     set_env KNONIX_LICENSE_MODE "connected"
     if [[ -z "$(read_env KNONIX_LICENSE_SERVICE_URL)" ]]; then
       set_env KNONIX_LICENSE_SERVICE_URL "https://ai.knonix.com"
     fi
-    echo "    Fleet enrollment token saved (connected mode)."
+    echo "    Enrollment token saved — connected mode (heartbeat-cron will start)."
   else
-    if [[ "${LICENSE_MODE_NOW}" == "connected" && -z "${FLEET_TOKEN_NOW}" ]]; then
-      echo "    No fleet token — switching to free (local) mode. You can add a token later."
-      set_env KNONIX_LICENSE_MODE "free"
-    fi
+    set_env KNONIX_LICENSE_MODE "offline"
+    echo "    Offline mode (no heartbeat-cron, no seat egress)."
+  fi
+  # Initial org owner (signup is disabled by default)
+  echo
+  echo "    Initial organization owner (required; open signup is disabled by default):"
+  OWNER_EMAIL="$(prompt_value "Owner email" "$(read_env KNONIX_BOOTSTRAP_ADMIN_EMAIL)")"
+  OWNER_PASS="$(prompt_value "Owner password (min 8 chars)" "")"
+  if [[ -n "${OWNER_EMAIL}" && -n "${OWNER_PASS}" ]]; then
+    set_env KNONIX_BOOTSTRAP_ADMIN_EMAIL "${OWNER_EMAIL}"
+    set_env KNONIX_BOOTSTRAP_ADMIN_PASSWORD "${OWNER_PASS}"
+    echo "    Owner credentials saved for post-start bootstrap (not committed to git)."
+  else
+    echo "    WARNING: No owner set. Temporarily set KNONIX_AUTH_DISABLE_SIGNUP=false to create one."
   fi
 else
   # Non-interactive: refuse known-bad default passwords (audit §5.5).
@@ -332,18 +340,17 @@ if declare -F detect_hardware_profile >/dev/null 2>&1; then
   fi
   apply_hardware_profile_env "${HW_PROFILE}" "${HW_CORES}"
   if [[ "${HW_PROFILE}" == "low" ]]; then
-    echo "    Low-resource mode: default model qwen2.5:3b (override in .env or Admin → Models)."
-    echo "    Tip: On MacBook / nested VMs there is no Apple Metal for Ollama — keep 3B + Quick mode."
-    echo "    Tip: Cloud-class speed needs a GPU Linux host or optional frontier APIs for non-CUI work."
+    echo "    Low-resource / CPU mode: default model qwen2.5:3b (instruct, not qwen3 thinking)."
+    echo "    WARNING: CPU-only is evaluation-grade; production chat needs NVIDIA GPU."
     echo "    Mac guide: docs/MACOS.md"
   fi
 else
   set_env_if_absent KNONIX_MODEL "qwen2.5:3b"
   set_env_if_absent KNONIX_CODING_MODEL "qwen2.5:3b"
-  set_env_if_absent OLLAMA_NUM_CTX "1536"
-  set_env_if_absent OLLAMA_NUM_PREDICT "256"
-  set_env_if_absent INFERENCE_MAX_OUTPUT_TOKENS "512"
-  set_env_if_absent OLLAMA_KEEP_ALIVE "-1"
+  set_env_if_absent OLLAMA_NUM_CTX "8192"
+  set_env_if_absent OLLAMA_NUM_PREDICT "4096"
+  set_env_if_absent INFERENCE_MAX_OUTPUT_TOKENS "4096"
+  set_env_if_absent OLLAMA_KEEP_ALIVE "30m"
 fi
 
 AUTH_ENABLED="$(read_env ENABLE_AUTH)"
@@ -467,20 +474,42 @@ COMPOSE_ARGS=(-f "${COMPOSE_FILE}")
 if [[ "${AUTH_ENABLED}" == "true" ]]; then
   COMPOSE_ARGS+=(--profile auth)
 fi
-# Seat heartbeats only when connected to Knonix billing (no outbound cron in offline/gov).
+# Seat heartbeats only when operator opts into connected mode (default offline for gov/ATO).
 LICENSE_MODE_COMPOSE="$(read_env KNONIX_LICENSE_MODE)"
-LICENSE_MODE_COMPOSE="${LICENSE_MODE_COMPOSE:-connected}"
+LICENSE_MODE_COMPOSE="${LICENSE_MODE_COMPOSE:-offline}"
 if [[ "${LICENSE_MODE_COMPOSE}" == "connected" ]]; then
   COMPOSE_ARGS+=(--profile connected)
-  echo "==> License mode: connected (daily seat heartbeat enabled)"
+  echo "==> License mode: connected (daily seat heartbeat to Knonix — outbound egress)"
 else
-  echo "==> License mode: ${LICENSE_MODE_COMPOSE} (no outbound heartbeat-cron)"
+  echo "==> License mode: ${LICENSE_MODE_COMPOSE} (no heartbeat-cron; no seat egress)"
 fi
-# NVIDIA GPU for Ollama when toolkit is present (skip on Mac VMs / CPU hosts).
-if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1 \
-  && [[ -f docker-compose.gpu.yml ]]; then
-  COMPOSE_ARGS+=(-f docker-compose.gpu.yml)
-  echo "==> NVIDIA GPU detected — enabling docker-compose.gpu.yml for Ollama"
+# NVIDIA GPU for Ollama (P0-1): nvidia-smi + container toolkit, or persisted KNONIX_GPU=true.
+detect_nvidia_gpu() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  nvidia-smi -L >/dev/null 2>&1 || return 1
+  # Prefer nvidia container runtime if docker reports it; fall back to smi alone.
+  if docker info 2>/dev/null | grep -qiE 'Runtimes:.*nvidia|nvidia'; then
+    return 0
+  fi
+  # toolkit may still work via default runtime + CDI
+  return 0
+}
+GPU_FLAG="$(read_env KNONIX_GPU)"
+if [[ "${GPU_FLAG}" == "true" ]] || detect_nvidia_gpu; then
+  if [[ -f docker-compose.gpu.yml ]]; then
+    COMPOSE_ARGS+=(-f docker-compose.gpu.yml)
+    set_env KNONIX_GPU "true"
+    echo "==> NVIDIA GPU enabled — using docker-compose.gpu.yml (KNONIX_GPU=true)"
+  fi
+else
+  set_env KNONIX_GPU "false"
+  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  echo "WARNING: No usable NVIDIA GPU detected."
+  echo "         Ollama will run in CPU-only mode (evaluation / lab only)."
+  echo "         Multi-minute answers are expected on small VMs/MacBooks."
+  echo "         Default chat model: qwen2.5:3b (fast instruct), not 8B reasoning."
+  echo "         Production quality: Linux host + NVIDIA + docker-compose.gpu.yml"
+  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 fi
 if [[ -n "${KNONIX_DOMAIN}" ]]; then
   if [[ ! -f "${PROXY_FILE}" ]]; then
@@ -716,6 +745,42 @@ fi
 # 5. Pull default sovereign models into Ollama (profile-aware; low-end = 3B only).
 CHAT_MODEL="$(read_env KNONIX_MODEL)"; CHAT_MODEL="${CHAT_MODEL:-qwen2.5:3b}"
 CODING_MODEL="$(read_env KNONIX_CODING_MODEL)"; CODING_MODEL="${CODING_MODEL:-${CHAT_MODEL}}"
+# Normalize legacy thinking default
+if [[ "${CHAT_MODEL}" == "qwen3:8b" ]]; then
+  echo "WARNING: KNONIX_MODEL=qwen3:8b is a reasoning model (slow on CPU). Prefer qwen2.5:3b/7b."
+fi
+# Bootstrap first org owner via GoTrue admin API when credentials provided.
+BOOT_EMAIL="$(read_env KNONIX_BOOTSTRAP_ADMIN_EMAIL)"
+BOOT_PASS="$(read_env KNONIX_BOOTSTRAP_ADMIN_PASSWORD)"
+if [[ "${AUTH_ENABLED}" == "true" && -n "${BOOT_EMAIL}" && -n "${BOOT_PASS}" ]]; then
+  echo "==> Bootstrapping organization owner ${BOOT_EMAIL}"
+  SERVICE_KEY="$(read_env SUPABASE_SECRET_KEY)"
+  AUTH_BASE="$(read_env KNONIX_AUTH_API_EXTERNAL_URL)"
+  AUTH_BASE="${AUTH_BASE:-http://127.0.0.1:8000/auth/v1}"
+  if [[ -n "${SERVICE_KEY}" ]]; then
+    # Prefer loopback Kong from host
+    HTTP_CODE="$(
+      curl -sS -o /tmp/bootstrap_user.json -w '%{http_code}' \
+        --connect-timeout 5 --max-time 30 \
+        -X POST "${AUTH_BASE}/admin/users" \
+        -H "apikey: ${SERVICE_KEY}" \
+        -H "Authorization: Bearer ${SERVICE_KEY}" \
+        -H 'Content-Type: application/json' \
+        -d "{\"email\":\"${BOOT_EMAIL}\",\"password\":\"${BOOT_PASS}\",\"email_confirm\":true}" \
+        2>/dev/null || echo "000"
+    )"
+    if [[ "${HTTP_CODE}" == "200" || "${HTTP_CODE}" == "201" ]]; then
+      echo "    Owner created (HTTP ${HTTP_CODE}). Sign in at /auth/login"
+      # Clear password from .env after successful bootstrap
+      sed -i.bak -E 's|^[[:space:]]*KNONIX_BOOTSTRAP_ADMIN_PASSWORD=.*|KNONIX_BOOTSTRAP_ADMIN_PASSWORD=|' .env 2>/dev/null && rm -f .env.bak || true
+    else
+      echo "    WARNING: bootstrap owner HTTP ${HTTP_CODE} (user may already exist). Check GoTrue logs."
+    fi
+  else
+    echo "    WARNING: SUPABASE_SECRET_KEY missing — cannot bootstrap owner automatically."
+  fi
+fi
+
 echo "==> Pulling default local models (${CHAT_MODEL}, nomic-embed-text)"
 echo "    (this can take several minutes on first run; needs free disk for models)"
 for model in "${CHAT_MODEL}" nomic-embed-text; do
