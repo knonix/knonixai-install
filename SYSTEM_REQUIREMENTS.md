@@ -46,14 +46,29 @@ Designed so **regular users** get answers in seconds–tens of seconds, not mult
 | **RAM**              | **8 GB minimum**, **16 GB recommended**                              |
 | **Docker data disk** | **40 GB free** (3B model ≈ 2 GB + stack)                             |
 | **GPU**              | None, or **&lt; 6 GB** VRAM (treated like low profile)               |
-| **Default model**    | **`qwen2.5:3b`** (same for coding to avoid loading two models)       |
-| **Context / output** | `OLLAMA_NUM_CTX=1536`, short max tokens for Quick mode               |
+| **Default model**    | **`qwen2.5:3b`** instruct (same for coding — avoid dual 7B loads)  |
+| **Context / output** | Profile sets `OLLAMA_NUM_CTX=2048` on low; compose default 8192 is for GPU/high RAM |
 
 **Expect:** ~3–10 tok/s on modern CPUs for short Quick-mode answers; keep **one** model
-loaded (`OLLAMA_MAX_LOADED_MODELS=1`). Avoid Deep research + huge RAG on 8 GB hosts.
+loaded (`OLLAMA_MAX_LOADED_MODELS=1` on low). Avoid Deep research + huge RAG on 8 GB hosts.
 
-**Do not** ship 7B/8B as the default on low-end boxes — cold load alone can take minutes
-and generation can drop to &lt; 1 tok/s, which feels “broken” next to cloud/OpenClaw UIs.
+**CPU-only is evaluation-grade.** Production interactive chat needs **NVIDIA GPU**
+(`docker-compose.gpu.yml` via `install.sh` when `nvidia-smi` works).
+
+**Do not** default to **`qwen3:8b`** (reasoning / hidden `<think>` chains) on CPU — it feels
+broken. Keep `qwen3:8b` as an optional **deep reasoning** model on GPU hosts only.
+
+### Context window memory impact
+
+| `OLLAMA_NUM_CTX` | Rough extra RAM for KV cache (7B Q4) | When |
+| ---------------- | ------------------------------------ | ---- |
+| 2048 | ~1–2 GB | CPU / Mac VM low profile |
+| 4096 | ~2–4 GB | medium |
+| 8192 | ~4–8 GB | GPU / high (compose default) |
+| 16384+ | 8 GB+ | Large GPU only |
+
+Higher `OLLAMA_NUM_PREDICT` (default 4096 on capable hosts) raises peak generation memory
+and time — lower it on small VMs (`512`–`1024`).
 
 ---
 
