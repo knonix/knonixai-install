@@ -278,6 +278,52 @@ const ENSURE_RELATED_FN =
     console.log("[knonix-entrypoint] strip-think-tags: pattern not found");
 }
 
+// --- 4f) Tool-loop quality: more retries, fewer steps on long research (CPU-friendly) ---
+{
+  // getOllamaChatSettings: toolCallingOptions maxRetries 1 → 2
+  let trOk = false;
+  for (const f of serverFiles) {
+    if (
+      patchFile(
+        f,
+        "toolCallingOptions:{maxRetries:1,forceCompletion:!0}",
+        "toolCallingOptions:{maxRetries:2,forceCompletion:!0}",
+        "tool-max-retries"
+      )
+    )
+      trOk = true;
+  }
+  // Mode step caps: reduce runaway tool loops that return blank on small models
+  let capOk = false;
+  for (const f of serverFiles) {
+    if (
+      patchFile(
+        f,
+        "quick:3,adaptive:5,pro:6,deep:8",
+        "quick:2,adaptive:3,pro:4,deep:5",
+        "search-mode-step-caps"
+      )
+    )
+      capOk = true;
+  }
+  // Knowledge topK default 8 → 5 (fits smaller num_ctx budgets)
+  let ragOk = false;
+  for (const f of serverFiles) {
+    if (
+      patchFile(
+        f,
+        "topK:t.limit??8",
+        "topK:t.limit??5",
+        "rag-topk-default"
+      )
+    )
+      ragOk = true;
+  }
+  if (!trOk) console.log("[knonix-entrypoint] tool-max-retries: pattern not found");
+  if (!capOk) console.log("[knonix-entrypoint] search-mode-step-caps: pattern not found");
+  if (!ragOk) console.log("[knonix-entrypoint] rag-topk-default: pattern not found");
+}
+
 // --- 5) Thinking dots cleanup: only ONE bounce-dot group (activity header) ---
 // List rows previously also rendered bounce dots + spin icons per active step.
 {

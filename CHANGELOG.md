@@ -14,6 +14,17 @@ Check for updates on an install:
 
 ---
 
+## [1.6.2] — 2026-07-17
+
+### Added
+- Runtime quality patches: tool retries, lower search step caps, RAG topK 5, think-strip, Working-only wait UI.
+- `scripts/publish-all.sh` for git + GHCR publish when PAT is available.
+
+### Changed
+- P0–P2 installer hardening (offline default, GPU overlay, healthchecks, Redis auth, JWT 1y).
+
+---
+
 ## [1.6.1] — 2026-07-13
 
 ### Added
