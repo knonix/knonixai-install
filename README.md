@@ -75,8 +75,51 @@ See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
   - **Smooth team / CMMC: 16 vCPU · 64 GB RAM · 200 GB disk**  
   - Best quality: **24 GB NVIDIA GPU**  
   - **Edge / Jetson:** Orin NX **16 GB+** or AGX Orin (NVMe) — Orin Nano 8 GB is demo-only  
-- **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for faster local inference
-  (uncomment the `deploy` block under `ollama` in `docker-compose.yml`). ARM64 / Jetson images: pull `linux/arm64` tags.
+- **(Optional) NVIDIA GPU + `nvidia-container-toolkit`** for production-grade local inference.
+  `install.sh` auto-detects GPU and applies `docker-compose.gpu.yml`. ARM64 / Jetson: pull `linux/arm64` tags.
+
+### GPU setup
+
+```bash
+# Driver + toolkit (Linux host)
+nvidia-smi
+# then re-run install — or force:
+echo 'KNONIX_GPU=true' >> .env
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile auth up -d
+```
+
+Without GPU, install defaults to a **small instruct model** (`qwen2.5:3b` on low-profile hosts)
+and prints a CPU evaluation warning. Do **not** use `qwen3:8b` as the daily chat default on CPU.
+
+### Outbound connections (egress)
+
+| Destination | When | Purpose |
+| ----------- | ---- | ------- |
+| `ghcr.io` | Image pull (`pull_policy=missing` by default) | App image |
+| `registry.ollama.ai` / Docker Hub | First model pull | Ollama models |
+| `ai.knonix.com` | **Only if** `KNONIX_LICENSE_MODE=connected` | Seat heartbeat (count only) |
+| Let's Encrypt | Domain mode with public DNS | HTTPS certs |
+| Public web | SearXNG engines (if enabled) | Metasearch grounding |
+
+**Default license mode is `offline`** — no seat heartbeat container. Opt in to connected
+billing only with an enrollment token. Air-gap: `./scripts/airgap-mode.sh`.
+
+### Offline / air-gap
+
+```bash
+./scripts/airgap-mode.sh   # offline + pull_policy=never + invite-only signup tip
+# Pre-load images with docker load; do not use --profile connected
+docker compose -f docker-compose.yml --profile auth up -d
+```
+
+### Upgrade (pinned images)
+
+```bash
+# Set KNONIX_IMAGE_TAG=vX.Y.Z in .env, then:
+docker compose pull
+docker compose up -d
+./scripts/check-updates.sh   # optional
+```
 
 ---
 
