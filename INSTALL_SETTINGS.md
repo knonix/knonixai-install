@@ -56,13 +56,18 @@ Migrations run **automatically** on app container start.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL inside Docker |
-| `OLLAMA_NUM_CTX` | `1536` (low) / `2048` (medium) / `4096` (high) | Context window; install auto-sets via hardware profile |
-| `OLLAMA_NUM_PREDICT` | `256` / `512` / `1024` | Max new tokens; keep short on CPU / Mac VMs |
-| `OLLAMA_MAX_LOADED_MODELS` | `1` | Avoid multi-model thrash on 16 GB hosts |
-| `OLLAMA_NUM_PARALLEL` | `1` | Concurrent Ollama slots |
+| `OLLAMA_NUM_CTX` | `2048` (low) / `4096` (medium) / `8192` (high/GPU) | Hardware profile; image floor patched to 512 |
+| `OLLAMA_NUM_PREDICT` | `512` / `1024` / `2048` | Max new tokens |
+| `OLLAMA_TEMPERATURE` / `TOP_P` / `REPEAT_PENALTY` | `0.6` / `0.9` / `1.1` | Sampling (app image honors these) |
+| `OLLAMA_KEEP_ALIVE` | `15m` / `30m` / `-1` | Finite on low/medium to limit thrash |
+| `OLLAMA_MAX_LOADED_MODELS` | `1` (2 on high) | Avoid multi-model thrash on 16 GB hosts |
+| `OLLAMA_NUM_PARALLEL` | `1` (2 on high) | Concurrent Ollama slots |
 | `KNONIX_MODEL` | `qwen2.5:3b` (low) | Instruct model — not qwen3 thinking by default |
-| `KNONIX_LICENSE_MODE` | `connected` | Use `offline` for air-gap / GCC (disables heartbeat-cron) |
-| `KNONIX_AUTH_DISABLE_SIGNUP` | `false` | Set `true` after first owner on public domains |
+| `REDIS_PASSWORD` | auto | Redis requirepass; sets `LOCAL_REDIS_URL` |
+| `KNONIX_LICENSE_MODE` | `connected` | `offline` or `./scripts/airgap-mode.sh` for GCC |
+| `KNONIX_AUTH_DISABLE_SIGNUP` | `true` on public domain | Invite-only; flip false for first owner only |
+| `KNONIX_AUTH_JWT_TTL_DAYS` | `365` | JWT lifetime (was ~10 years) |
+| `POSTGRES_SSL` | `false` | `./scripts/enable-db-tls.sh` for in-cluster TLS |
 | `OLLAMA_KEEP_ALIVE` | `-1` | Keep model loaded (`-1` = always) |
 | `KNONIX_MODEL` | `qwen2.5:7b` | Default chat model |
 | `KNONIX_CODING_MODEL` | `qwen2.5-coder:7b` | Default coding model |

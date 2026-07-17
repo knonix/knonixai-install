@@ -35,9 +35,10 @@ services:
     command: ["npx", "next", "start", "-H", "0.0.0.0"]
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
-      DATABASE_RESTRICTED_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}
-      DATABASE_SSL_DISABLED: 'true'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}${DATABASE_SSL_QUERY:-}
+      DATABASE_RESTRICTED_URL: postgresql://${POSTGRES_USER:-knonixai}:${POSTGRES_PASSWORD:-knonixai}@postgres:5432/${POSTGRES_DB:-knonixai}${DATABASE_SSL_QUERY:-}
+      # false when POSTGRES_SSL=true (scripts/enable-db-tls.sh sets both)
+      DATABASE_SSL_DISABLED: ${DATABASE_SSL_DISABLED:-true}
       ENABLE_AUTH: ${ENABLE_AUTH:-true}
       ANONYMOUS_USER_ID: ${ANONYMOUS_USER_ID:-docker-anonymous}
       # Self-hosted Supabase Auth (only used when ENABLE_AUTH=true). The URL
@@ -101,7 +102,15 @@ services:
       KNONIX_RAG_ENABLED: ${KNONIX_RAG_ENABLED:-true}
       KNONIX_RAG_EMBED_MODEL: ${KNONIX_RAG_EMBED_MODEL:-nomic-embed-text}
       KNONIX_RAG_EMBED_DIM: ${KNONIX_RAG_EMBED_DIM:-768}
+      # Redis auth: install.sh sets LOCAL_REDIS_URL=redis://:PASSWORD@redis:6379
       LOCAL_REDIS_URL: ${LOCAL_REDIS_URL:-redis://redis:6379}
+      # Sampling (image lib_inference_settings reads these)
+      OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0.6}
+      OLLAMA_TOP_P: ${OLLAMA_TOP_P:-0.9}
+      OLLAMA_REPEAT_PENALTY: ${OLLAMA_REPEAT_PENALTY:-1.1}
+      INFERENCE_TEMPERATURE: ${INFERENCE_TEMPERATURE:-${OLLAMA_TEMPERATURE:-0.6}}
+      INFERENCE_TOP_P: ${INFERENCE_TOP_P:-${OLLAMA_TOP_P:-0.9}}
+      INFERENCE_NUM_CTX: ${INFERENCE_NUM_CTX:-${OLLAMA_NUM_CTX:-1536}}
       SEARCH_API: ${SEARCH_API:-searxng}
       SEARXNG_API_URL: ${SEARXNG_API_URL:-http://searxng:8080}
     # Loopback only — Caddy reaches knonixai on the compose network by name.
@@ -167,6 +176,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-knonixai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-knonixai}
       POSTGRES_DB: ${POSTGRES_DB:-knonixai}
+      POSTGRES_SSL: ${POSTGRES_SSL:-false}
     # Loopback only (Docker bypasses UFW when binding 0.0.0.0).
     ports:
       - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
@@ -176,6 +186,24 @@ services:
       # empty data volume). Harmless when auth is disabled.
       - ./init-auth-db.sql:/docker-entrypoint-initdb.d/00-init-auth-db.sql:ro
       - ./init-rag-db.sql:/docker-entrypoint-initdb.d/01-init-rag-db.sql:ro
+      # Optional TLS: scripts/gen-db-tls.sh → POSTGRES_SSL=true (certs in secrets/postgres-ssl)
+      - ./secrets/postgres-ssl:/var/lib/postgresql/ssl:ro
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        if [ "$${POSTGRES_SSL:-false}" = "true" ] && [ -f /var/lib/postgresql/ssl/server.crt ]; then
+          cp /var/lib/postgresql/ssl/server.crt /var/lib/postgresql/data/server.crt
+          cp /var/lib/postgresql/ssl/server.key /var/lib/postgresql/data/server.key
+          chown postgres:postgres /var/lib/postgresql/data/server.crt /var/lib/postgresql/data/server.key 2>/dev/null || true
+          chmod 600 /var/lib/postgresql/data/server.key
+          exec docker-entrypoint.sh postgres \
+            -c ssl=on \
+            -c ssl_cert_file=/var/lib/postgresql/data/server.crt \
+            -c ssl_key_file=/var/lib/postgresql/data/server.key
+        fi
+        exec docker-entrypoint.sh postgres
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-knonixai}']
       interval: 10s
@@ -185,12 +213,22 @@ services:
   redis:
     image: redis:alpine
     restart: unless-stopped
-    # Loopback only — unauthenticated Redis must not face the network.
+    # Loopback only; requirepass when REDIS_PASSWORD is set (install.sh generates one).
     ports:
       - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --save 60 1000 --maxmemory-policy allkeys-lru
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --appendonly yes --save 60 1000 --maxmemory-policy allkeys-lru --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --appendonly yes --save 60 1000 --maxmemory-policy allkeys-lru
+        fi
 
   searxng:
     image: searxng/searxng

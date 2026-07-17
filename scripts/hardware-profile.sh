@@ -159,42 +159,54 @@ apply_hardware_profile_env() {
 
   case "${profile}" in
     high)
+      # GPU / 48+ GB: large context (audit P1-1), instruct models, dual load OK
       "${set_fn}" KNONIX_MODEL "qwen2.5:7b"
       "${set_fn}" KNONIX_CODING_MODEL "qwen2.5-coder:7b"
-      "${set_fn}" OLLAMA_NUM_CTX "4096"
-      "${set_fn}" OLLAMA_NUM_PREDICT "1024"
+      "${set_fn}" OLLAMA_NUM_CTX "8192"
+      "${set_fn}" OLLAMA_NUM_PREDICT "2048"
       "${set_fn}" INFERENCE_MAX_OUTPUT_TOKENS "2048"
       "${set_fn}" OLLAMA_KEEP_ALIVE "-1"
-      "${set_fn}" OLLAMA_NUM_PARALLEL "1"
+      "${set_fn}" OLLAMA_NUM_PARALLEL "2"
       "${set_fn}" OLLAMA_MAX_LOADED_MODELS "2"
       "${set_fn}" OLLAMA_FLASH_ATTENTION "1"
       "${set_fn}" OLLAMA_NUM_THREAD "${cores}"
+      "${set_fn}" OLLAMA_TEMPERATURE "0.6"
+      "${set_fn}" OLLAMA_TOP_P "0.9"
+      "${set_fn}" OLLAMA_REPEAT_PENALTY "1.1"
       ;;
     medium)
       "${set_fn}" KNONIX_MODEL "qwen2.5:7b"
       "${set_fn}" KNONIX_CODING_MODEL "qwen2.5-coder:7b"
-      "${set_fn}" OLLAMA_NUM_CTX "2048"
-      "${set_fn}" OLLAMA_NUM_PREDICT "512"
+      "${set_fn}" OLLAMA_NUM_CTX "4096"
+      "${set_fn}" OLLAMA_NUM_PREDICT "1024"
       "${set_fn}" INFERENCE_MAX_OUTPUT_TOKENS "1024"
-      "${set_fn}" OLLAMA_KEEP_ALIVE "-1"
+      # Finite keep-alive reduces thrash when switching models on 32 GB hosts
+      "${set_fn}" OLLAMA_KEEP_ALIVE "30m"
       "${set_fn}" OLLAMA_NUM_PARALLEL "1"
       "${set_fn}" OLLAMA_MAX_LOADED_MODELS "1"
       "${set_fn}" OLLAMA_FLASH_ATTENTION "1"
       "${set_fn}" OLLAMA_NUM_THREAD "${cores}"
+      "${set_fn}" OLLAMA_TEMPERATURE "0.6"
+      "${set_fn}" OLLAMA_TOP_P "0.9"
+      "${set_fn}" OLLAMA_REPEAT_PENALTY "1.1"
       ;;
     *)
       # low — interactive on 8–16 GB CPU, MacBook VMs, Docker Desktop
       "${set_fn}" KNONIX_MODEL "qwen2.5:3b"
       # Same model for coding on low RAM: second 7B model thrash kills speed.
       "${set_fn}" KNONIX_CODING_MODEL "qwen2.5:3b"
-      "${set_fn}" OLLAMA_NUM_CTX "1536"
-      "${set_fn}" OLLAMA_NUM_PREDICT "256"
+      # Image clamps num_ctx to max(env, 512) after our entrypoint patch (was 2048)
+      "${set_fn}" OLLAMA_NUM_CTX "2048"
+      "${set_fn}" OLLAMA_NUM_PREDICT "512"
       "${set_fn}" INFERENCE_MAX_OUTPUT_TOKENS "512"
-      "${set_fn}" OLLAMA_KEEP_ALIVE "-1"
+      "${set_fn}" OLLAMA_KEEP_ALIVE "15m"
       "${set_fn}" OLLAMA_NUM_PARALLEL "1"
       "${set_fn}" OLLAMA_MAX_LOADED_MODELS "1"
       "${set_fn}" OLLAMA_FLASH_ATTENTION "1"
       "${set_fn}" OLLAMA_NUM_THREAD "${cores}"
+      "${set_fn}" OLLAMA_TEMPERATURE "0.6"
+      "${set_fn}" OLLAMA_TOP_P "0.9"
+      "${set_fn}" OLLAMA_REPEAT_PENALTY "1.1"
       ;;
   esac
 }

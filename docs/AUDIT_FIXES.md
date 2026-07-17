@@ -1,71 +1,66 @@
-# Audit fixes (installer repo)
+# Audit fixes — complete status
 
-This repo is the **image-only installer**. Chat prompt templates, SSE render, and
-sampling live inside `ghcr.io/knonix/knonixai` and are only partially improvable
-via env vars + `scripts/knonix-entrypoint.sh` runtime patches.
+Scope: **knonixai-install** (image-only installer). App prompt/SSE/RAG internals
+live in `ghcr.io/knonix/knonixai` and are only partially adjustable via env +
+`scripts/knonix-entrypoint.sh`.
 
-## Status vs. external audit recommendations
+Last updated: 2026-07-17 (this host).
 
-| ID | Recommendation | Status | Where |
-| -- | -------------- | ------ | ----- |
-| P0-1 | GPU for Ollama | **Done** | `docker-compose.gpu.yml`; `install.sh` auto-adds when `nvidia-smi` works |
-| P0-2 | Ship SearXNG settings + heartbeat | **Done** (already present) | `searxng/settings.yml`, `scripts/heartbeat-cron.sh`, `scripts/preflight-mounts.sh` |
-| P0-3 | Offline/gov heartbeat off by default option | **Done** | `heartbeat-cron` uses `profiles: [connected]`; set `KNONIX_LICENSE_MODE=offline` |
-| P0-4 | Non-thinking default model | **Done** | Default `qwen2.5:3b` / hardware profile; not `qwen3:8b` |
-| P1-1 | Context sizing | **Done** (profile-based) | low 1536 / medium 2048 / high 4096 via `hardware-profile.sh` |
-| P1-2 | Healthchecks ollama + app | **Done** | `docker-compose.yml` healthcheck + `depends_on: service_healthy` |
-| P1-3 | NUM_PARALLEL / MAX_LOADED | **Done** | Defaults `1` / `1` |
-| P1-4 | Loopback ports | **Done** | Postgres/Redis/Ollama/Kong/app on `127.0.0.1` |
-| P1-5 | Signup control for domain | **Documented + tip** | `KNONIX_AUTH_DISABLE_SIGNUP` |
-| P1-6 | Caddy license routes on customers | **Done** | Customer `Caddyfile` has no `/v1` fleet routes; only `Caddyfile.platform` |
-| P2-1 | Doc drift | **Done** | `INSTALL_SETTINGS.md` aligned |
-| P2-2 | Pin digest / pull policy | **Partial** | Documented; set `KNONIX_IMAGE_TAG` + `KNONIX_IMAGE_PULL_POLICY=never` for air-gap |
-| UX | Waiting status noise | **Done** | entrypoint `waiting-status-simple` |
-| UX | Test space “Collab Verify” | **Done** (deleted from DB) | — |
-| Mac | MacBook / nested VM profile | **Done** | `docs/MACOS.md`, virt-aware profile |
+## Fix table (audit §6.1)
 
-## Image-source items (need GHCR app source / next image build)
+| ID | Status | Implementation |
+| -- | ------ | -------------- |
+| **P0-1** GPU | **Done** | `docker-compose.gpu.yml`; `install.sh` / `platform-up.sh` auto-attach when `nvidia-smi` works. CPU/Mac: no GPU (expected). |
+| **P0-2** SearXNG + heartbeat + preflight | **Done** | `searxng/settings.yml`, `scripts/heartbeat-cron.sh`, `scripts/preflight-mounts.sh` |
+| **P0-3** Offline heartbeat | **Done** | `heartbeat-cron` → `profiles: [connected]`; `scripts/airgap-mode.sh`; gov cloud → prefer offline |
+| **P0-4** Non-thinking default | **Done** | Default `qwen2.5:3b` / profile; entrypoint **strip-think-tags** for `<think>` |
+| **P1-1** Context size | **Done** | low 2048 / medium 4096 / **high 8192**; entrypoint removes image min-2048 floor → min 512 |
+| **P1-2** Healthchecks | **Done** | Ollama + knonixai; `depends_on: service_healthy` |
+| **P1-3** Parallel / loaded models | **Done** | Defaults 1/1; high profile 2/2; finite `KEEP_ALIVE` on low/medium |
+| **P1-4** Ports / Redis / DB TLS | **Done** | Loopback ports; **REDIS_PASSWORD** + requirepass; **scripts/gen-db-tls.sh** + **enable-db-tls.sh** |
+| **P1-5** Signup | **Done** | Public domain → `KNONIX_AUTH_DISABLE_SIGNUP=true` by default |
+| **P1-6** Customer Caddy fleet | **Done** | Fleet only in `Caddyfile.platform` |
+| **P2-1** Doc drift | **Done** | `.env.example`, `INSTALL_SETTINGS.md`, compose aligned |
+| **P2-2** Air-gap pull | **Done** | `scripts/airgap-mode.sh` → `pull_policy=never` + offline |
+| **P2-3** JWT expiry | **Done** | Default **365 days** (`KNONIX_AUTH_JWT_TTL_DAYS`) |
+| **§5.5** Weak postgres default | **Done** | Refuses `knonixai` / `change-me-in-production` |
+| **Sampling env** | **Done** | `OLLAMA_TEMPERATURE` / `TOP_P` / `REPEAT_PENALTY` wired (image already reads them) |
+| **Waiting UX** | **Done** | Single **Working** status |
+| **Test space** | **Done** | Collab Verify removed |
 
-- Chat template correctness and `<think>` stripping for Qwen3
-- History trim when context overflows
-- Sampling temperature/top_p per model
-- RAG top-k / chunk budget
-- Space permissions UI (right-click members) — schema supports roles; UI/API in image
-- Token-level SSE already proxied correctly in `Caddyfile` (`flush_interval -1`)
+## Image-source residual (cannot fully close without app repo)
 
-## os-june (https://github.com/open-software-network/os-june) takeaways
+| Item | What we did | Remaining |
+| ---- | ----------- | --------- |
+| Chat templates | Prefer instruct models | Native template QA needs app tests |
+| History trim | Larger ctx on GPU/high | Summarize-vs-drop policy is image code |
+| SSE token render | Caddy `flush_interval -1` | Frontend cursor polish is image UI |
+| RAG top-k / budget | Context larger on high | Chunker/rerank in image |
+| System prompt | — | Image product work |
+| Space ACL UI | Org-wide share + DB trigger | Right-click members UI in image |
+| GHCR publish | Local image + scripts ready | Needs your `GITHUB_TOKEN` |
 
-Useful product ideas (not a drop-in code merge — June is a Tauri desktop app):
+## Verify on this host
 
-1. **Privacy-tier labels on models** (local / private / frontier) — we should surface
-   sovereign vs frontier clearly in Admin (image work).
-2. **Local-first defaults** — already our posture; keep frontier off by default.
-3. **Opt-in telemetry only** — our heartbeat is already optional via `offline` mode;
-   never enable for CUI without ATO.
-4. **Activity HUD / clear agent status** — simplified waiting label toward that UX.
-5. **Pinned image digests + verify page** — matches our `check-updates` / release tags.
-
-## Apply on this host
-
-```bash
-cd /home/knonix/knonixai-install
-bash scripts/preflight-mounts.sh
-# platform host:
-docker compose -f docker-compose.yml -f docker-compose.proxy.yml \
-  -f docker-compose.platform.yml -f docker-compose.fix-health.yml \
-  --profile auth --profile connected up -d
-./scripts/optimize-cpu-speed.sh low   # Mac VM
-./scripts/verify-install.sh
+```text
+app=healthy  home=200  model=qwen2.5:3b
+redis: NOAUTH without password; PONG with REDIS_PASSWORD
+entrypoint: waiting-status-simple, ollama-num-ctx-floor, strip-think-tags
+spaces: Knonix Corp only
 ```
 
-## Publish reminder
-
-GHCR `:latest` is **not** updated until you authenticate and run:
+## Operator commands
 
 ```bash
-export GITHUB_TOKEN=ghp_…   # repo + write:packages
-export GHCR_USER=knonix
+# Security / air-gap
+./scripts/airgap-mode.sh
+./scripts/enable-db-tls.sh   # optional Postgres SSL
+
+# Speed profile
+./scripts/optimize-cpu-speed.sh low|medium|high
+
+# Publish (still needs token)
+export GITHUB_TOKEN=ghp_… GHCR_USER=knonix
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 ./scripts/push-release.sh
-# or: PUSH=true ./scripts/release.sh
 ```

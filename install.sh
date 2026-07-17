@@ -221,9 +221,9 @@ if [[ -t 0 ]]; then
     fi
   fi
 else
-  # Non-interactive: refuse known-bad default passwords in production-ish configs.
-  if [[ "${PG_PASS_NOW}" == "change-me-in-production" ]]; then
-    echo "ERROR: POSTGRES_PASSWORD is still 'change-me-in-production'." >&2
+  # Non-interactive: refuse known-bad default passwords (audit §5.5).
+  if [[ -z "${PG_PASS_NOW}" || "${PG_PASS_NOW}" == "change-me-in-production" || "${PG_PASS_NOW}" == "knonixai" ]]; then
+    echo "ERROR: POSTGRES_PASSWORD is weak or unset (refused: empty, change-me-in-production, knonixai)." >&2
     echo "       Edit .env and set a strong password, then re-run." >&2
     exit 1
   fi
@@ -251,6 +251,15 @@ if command -v openssl >/dev/null 2>&1; then
     set_env KNONIX_CONNECTOR_ENCRYPTION_KEY "$(openssl rand -base64 32)"
     echo "==> Generated KNONIX_CONNECTOR_ENCRYPTION_KEY (connector token encryption)"
   fi
+  if [[ -z "$(read_env REDIS_PASSWORD)" ]]; then
+    set_env REDIS_PASSWORD "$(openssl rand -hex 24)"
+    echo "==> Generated REDIS_PASSWORD (Redis requirepass)"
+  fi
+  # Keep LOCAL_REDIS_URL in sync with password for the app container.
+  RP="$(read_env REDIS_PASSWORD)"
+  if [[ -n "${RP}" ]]; then
+    set_env LOCAL_REDIS_URL "redis://:${RP}@redis:6379"
+  fi
   # Model defaults come from hardware profile (after set_env_if_absent is defined).
 fi
 
@@ -272,8 +281,13 @@ mint_supabase_jwt() {
   local role="$1" secret="$2" header payload iat exp signing_input sig
   header='{"alg":"HS256","typ":"JWT"}'
   iat="$(date +%s)"
-  # ~10 years so keys don't silently expire on long-lived on-prem installs.
-  exp=$((iat + 315360000))
+  # Default 1 year (audit P2-3). Override days via KNONIX_AUTH_JWT_TTL_DAYS (min 30, max 3650).
+  local ttl_days
+  ttl_days="$(read_env KNONIX_AUTH_JWT_TTL_DAYS 2>/dev/null || true)"
+  ttl_days="${ttl_days:-365}"
+  if ! [[ "${ttl_days}" =~ ^[0-9]+$ ]] || [[ "${ttl_days}" -lt 30 ]]; then ttl_days=365; fi
+  if [[ "${ttl_days}" -gt 3650 ]]; then ttl_days=3650; fi
+  exp=$((iat + ttl_days * 86400))
   payload="{\"role\":\"${role}\",\"iss\":\"supabase\",\"iat\":${iat},\"exp\":${exp}}"
   signing_input="$(printf '%s' "$header" | b64url).$(printf '%s' "$payload" | b64url)"
   sig="$(printf '%s' "$signing_input" \
@@ -480,10 +494,25 @@ if [[ -n "${KNONIX_DOMAIN}" ]]; then
     echo "    NOTE: KNONIX_ACME_EMAIL is empty. Set it in .env for cert-expiry notices."
   fi
   echo "    Requirements: DNS A/AAAA for ${KNONIX_DOMAIN} -> this host, and ports 80+443 open."
-  # Internet-facing installs: prefer invite-only (first-user race + open signup is risky).
-  if [[ "${KNONIX_DOMAIN}" != "localhost" && -z "$(read_env KNONIX_AUTH_DISABLE_SIGNUP)" ]]; then
-    set_env_if_absent KNONIX_AUTH_DISABLE_SIGNUP "false"
-    echo "    Tip: set KNONIX_AUTH_DISABLE_SIGNUP=true after creating the first owner (GCC/public)."
+  # Internet-facing: default invite-only (audit P1-5). First owner:
+  #   temporarily set KNONIX_AUTH_DISABLE_SIGNUP=false, sign up, then re-enable true
+  #   or use KNONIX_BOOTSTRAP_ADMIN_EMAIL + password + GoTrue admin (future).
+  if [[ "${KNONIX_DOMAIN}" != "localhost" ]]; then
+    if [[ -z "$(read_env KNONIX_AUTH_DISABLE_SIGNUP)" ]]; then
+      set_env KNONIX_AUTH_DISABLE_SIGNUP "true"
+      echo "    KNONIX_AUTH_DISABLE_SIGNUP=true (public domain — open signup off)"
+      echo "    First owner: set to false once, create account, then set true again."
+    fi
+  fi
+  # GCC High / gov: prefer offline licensing (no outbound heartbeat)
+  MS_CLOUD="$(read_env KNONIX_MS_CLOUD_ENVIRONMENT)"
+  if [[ "${MS_CLOUD}" == "gcc_high" || "${MS_CLOUD}" == "dod" || "$(read_env KNONIX_GOV_MODE)" == "true" ]]; then
+    if [[ -z "$(read_env KNONIX_LICENSE_MODE)" || "$(read_env KNONIX_LICENSE_MODE)" == "connected" ]]; then
+      if [[ "$(read_env KNONIX_FORCE_CONNECTED)" != "true" ]]; then
+        set_env_if_absent KNONIX_LICENSE_MODE "offline"
+        echo "    Gov cloud detected — KNONIX_LICENSE_MODE defaults toward offline (no seat egress)."
+      fi
+    fi
   fi
 else
   echo "==> Local mode: serving at http://127.0.0.1:3000 (no domain configured)"

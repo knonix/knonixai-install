@@ -214,6 +214,70 @@ const ENSURE_RELATED_FN =
   if (!waitOk) console.log("[knonix-entrypoint] waiting-status-simple: pattern not found");
 }
 
+// --- 4d) Honor low OLLAMA_NUM_CTX (image forced min 2048, crushing 8–16 GB hosts) ---
+{
+  const OLD =
+    "num_ctx:Math.min(Math.max(E.baseCtx,2048),E.maxCtx)";
+  const NEW =
+    "num_ctx:Math.min(Math.max(E.baseCtx,512),E.maxCtx)";
+  // Variant minified aliases (i.baseCtx / t.baseCtx)
+  const variants = [
+    [OLD, NEW],
+    [
+      "num_ctx:Math.min(Math.max(i.baseCtx,2048),i.maxCtx)",
+      "num_ctx:Math.min(Math.max(i.baseCtx,512),i.maxCtx)",
+    ],
+    [
+      "num_ctx:Math.min(Math.max(t.baseCtx,2048),t.maxCtx)",
+      "num_ctx:Math.min(Math.max(t.baseCtx,512),t.maxCtx)",
+    ],
+  ];
+  let ctxOk = false;
+  for (const [o, n] of variants) {
+    for (const f of serverFiles) {
+      if (patchFile(f, o, n, "ollama-num-ctx-floor")) ctxOk = true;
+    }
+  }
+  if (!ctxOk) console.log("[knonix-entrypoint] ollama-num-ctx-floor: pattern not found");
+}
+
+// --- 4e) Strip Qwen3 <think>…</think> from assistant text before save/display ---
+{
+  const STRIP_FN =
+    'function knonixStripThink(t){return"string"!=typeof t?t:String(t).replace(/<think>[\\s\\S]*?<\\/think>/gi," ").replace(/<think>[\\s\\S]*$/gi," ").replace(/\\n{3,}/g,"\\n\\n").trim()}';
+  let stripOk = false;
+  for (const f of serverFiles) {
+    let data;
+    try {
+      data = fs.readFileSync(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (data.includes("function knonixStripThink")) {
+      stripOk = true;
+      continue;
+    }
+    let next = data;
+    // Common post-IK save path (with or without related-followups injection)
+    if (next.includes("let G=IK(I.text)") && !next.includes("knonixStripThink(IK")) {
+      next = next.split("let G=IK(I.text)").join("let G=knonixStripThink(IK(I.text))");
+    }
+    if (next.includes("let G=knonixStripThink") && !next.includes("function knonixStripThink")) {
+      // Prepend helper near first use
+      const idx = next.indexOf("let G=knonixStripThink");
+      next = next.slice(0, idx) + STRIP_FN + next.slice(idx);
+    }
+    // Also wrap plain IK(I.text) return variants
+    if (next !== data) {
+      fs.writeFileSync(f, next);
+      console.log(`[knonix-entrypoint] strip-think-tags: patched ${path.basename(f)}`);
+      stripOk = true;
+    }
+  }
+  if (!stripOk)
+    console.log("[knonix-entrypoint] strip-think-tags: pattern not found");
+}
+
 // --- 5) Thinking dots cleanup: only ONE bounce-dot group (activity header) ---
 // List rows previously also rendered bounce dots + spin icons per active step.
 {
