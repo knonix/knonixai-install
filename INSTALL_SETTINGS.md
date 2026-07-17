@@ -56,8 +56,11 @@ Migrations run **automatically** on app container start.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL inside Docker |
-| `OLLAMA_NUM_CTX` | `2048` (low) / `4096` (medium) / `8192` (high/GPU) | Hardware profile; image floor patched to 512 |
-| `OLLAMA_NUM_PREDICT` | `512` / `1024` / `2048` | Max new tokens |
+| `OLLAMA_NUM_CTX` | Compose default **8192**; profile may set 2048/4096/8192 | Larger = more RAM (see SYSTEM_REQUIREMENTS) |
+| `OLLAMA_NUM_PREDICT` | Compose default **4096** | Max new tokens; lower on CPU |
+| `OLLAMA_KEEP_ALIVE` | **30m** | Was `-1` forever; reduces thrash |
+| `OLLAMA_NUM_PARALLEL` | **2** | Concurrent generations |
+| `OLLAMA_MAX_LOADED_MODELS` | **2** | Lower to 1 on 16 GB hosts |
 | `OLLAMA_TEMPERATURE` / `TOP_P` / `REPEAT_PENALTY` | `0.6` / `0.9` / `1.1` | Sampling (app image honors these) |
 | `OLLAMA_KEEP_ALIVE` | `15m` / `30m` / `-1` | Finite on low/medium to limit thrash |
 | `OLLAMA_MAX_LOADED_MODELS` | `1` (2 on high) | Avoid multi-model thrash on 16 GB hosts |
