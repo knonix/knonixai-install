@@ -22,7 +22,10 @@ else
 fi
 
 echo "==> Profile: $(profile_description "${PROFILE}")"
-echo "    ${MEM_GB} GB RAM · ${CORES} threads · GPU=${GPU} VRAM≈${VRAM} MB"
+echo "    ${MEM_GB} GB RAM · ${CORES} inference threads · GPU=${GPU} VRAM≈${VRAM} MB"
+if declare -F host_environment_hint >/dev/null 2>&1; then
+  echo "    Host: $(host_environment_hint)"
+fi
 
 # Minimal set_env_if_absent for this script (always rewrite speed knobs when forced).
 set_env_if_absent() {
@@ -65,18 +68,33 @@ docker compose exec -T ollama ollama pull "${MODEL}" || true
 echo "==> Stopping models not needed on this profile (free RAM)"
 case "${PROFILE}" in
   low)
-    for m in qwen3:8b qwen2.5:7b qwen2.5-coder:7b; do
+    for m in qwen3:8b qwen2.5:7b qwen2.5-coder:7b qwen2.5-coder:3b; do
+      docker compose exec -T ollama ollama stop "$m" 2>/dev/null || true
+    done
+    ;;
+  medium)
+    for m in qwen3:8b qwen3:14b qwen3:32b; do
       docker compose exec -T ollama ollama stop "$m" 2>/dev/null || true
     done
     ;;
 esac
 
 echo "==> Recreate ollama + knonixai with new env"
+COMPOSE=(docker compose -f docker-compose.yml)
 if [[ -f docker-compose.proxy.yml ]] && grep -qE '^[[:space:]]*KNONIX_DOMAIN=.+' .env; then
-  docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --force-recreate ollama knonixai
-else
-  docker compose -f docker-compose.yml up -d --force-recreate ollama knonixai
+  COMPOSE+=(-f docker-compose.proxy.yml)
 fi
+if [[ -f docker-compose.platform.yml ]]; then
+  COMPOSE+=(-f docker-compose.platform.yml)
+fi
+if [[ -f docker-compose.fix-health.yml ]]; then
+  COMPOSE+=(-f docker-compose.fix-health.yml)
+fi
+if grep -qE '^[[:space:]]*#?.*profile:.*auth|supabase-auth' docker-compose.yml 2>/dev/null \
+  || docker compose ls 2>/dev/null | grep -q auth; then
+  COMPOSE+=(--profile auth)
+fi
+"${COMPOSE[@]}" up -d --force-recreate ollama knonixai
 
 echo "==> Persist active model"
 docker compose exec -T postgres \

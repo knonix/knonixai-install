@@ -71,6 +71,7 @@ See **[FEATURES.md](./FEATURES.md)** for the complete feature list and UI map.
 
 - **Hardware** — see **[SYSTEM_REQUIREMENTS.md](./SYSTEM_REQUIREMENTS.md)**  
   - Evaluation: 4 vCPU · 16 GB RAM · **50 GB** Docker data  
+  - **MacBook / nested Ubuntu VM: 8 vCPU · 16 GB · 60 GB** (CPU-only 3B; see [docs/MACOS.md](./docs/MACOS.md))  
   - **Smooth team / CMMC: 16 vCPU · 64 GB RAM · 200 GB disk**  
   - Best quality: **24 GB NVIDIA GPU**  
   - **Edge / Jetson:** Orin NX **16 GB+** or AGX Orin (NVMe) — Orin Nano 8 GB is demo-only  

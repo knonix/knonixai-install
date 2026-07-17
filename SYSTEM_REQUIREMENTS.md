@@ -18,6 +18,7 @@ Comparisons: **[COMPARISON.md](./COMPARISON.md)**
 
 | Your goal | Min hardware | Recommended models (auto-selected by `./install.sh`) |
 | --------- | ------------ | ---------------------------------------------------- |
+| **MacBook Pro / Docker Desktop / nested Ubuntu VM** | **6–8 vCPU · 12–16 GB to the VM · 60 GB disk** | **`qwen2.5:3b`** (CPU only — no Metal) |
 | **Low CPU / small VM / no GPU** | **4 vCPU · 8–16 GB RAM · 40 GB disk** | **`qwen2.5:3b`** + embed (interactive) |
 | **Comfortable CPU laptop / 32 GB** | 8 vCPU · 32 GB RAM · 80 GB disk | `qwen2.5:7b` + optional coder |
 | **Smooth team / CMMC space** | **16 vCPU · 64 GB RAM · 200 GB disk** | 7B–8B tools + embed |
@@ -25,9 +26,13 @@ Comparisons: **[COMPARISON.md](./COMPARISON.md)**
 | **Edge / Jetson** | **Orin NX 16 GB+** or **AGX Orin** · 128 GB+ NVMe | 3B–8B tools model |
 | **Near-frontier open weights** | Multi-GPU 40–80 GB · 128 GB RAM · 500 GB | 70B / MoE class |
 
-`./install.sh` detects RAM + NVIDIA VRAM and applies a **low / medium / high** profile
-automatically (see `scripts/hardware-profile.sh`). Override anytime with `KNONIX_MODEL`
-in `.env` or Admin → Models.
+`./install.sh` detects RAM + NVIDIA VRAM **and virtualization** (QEMU/UTM/Parallels/Docker Desktop)
+and applies a **low / medium / high** profile automatically (see `scripts/hardware-profile.sh`).
+Nested VMs and Mac-hosted guests default to **low** so macOS stays responsive. Override anytime
+with `KNONIX_MODEL` in `.env` or Admin → Models.
+
+**Apple / MacBook:** full guide → **[docs/MACOS.md](./docs/MACOS.md)**. Apple Metal is **not**
+available inside Linux containers; treat Mac installs as **CPU-only**.
 
 ---
 

@@ -6,12 +6,14 @@ You do **not** need to be a developer. If you can open a Terminal and paste comm
 
 ## What you need
 
-1. A computer or server (Linux is best)
-   - **Works on low-end / no GPU:** 4 CPU cores · **8–16 GB RAM** (default model is small and fast)
-   - **Smoother with more RAM or a GPU** — the installer auto-picks model size
+1. A computer or server (Linux is best; **MacBook works** via Docker Desktop or an Ubuntu VM)
+   - **Works on low-end / no GPU / MacBook:** 4–8 CPU cores · **8–16 GB RAM** (default model is small and fast)
+   - **Smoother with more RAM or an NVIDIA GPU** — the installer auto-picks model size
+   - **Mac note:** the AI runs on CPU inside Docker/Linux (no Apple Metal). See [docs/MACOS.md](./docs/MACOS.md)
 2. **Docker Desktop** (Mac/Windows) or **Docker Engine** (Linux)  
-   Download: https://docs.docker.com/get-docker/
-3. About **40 GB** free disk on small machines (more if you install large models later)
+   Download: https://docs.docker.com/get-docker/  
+   On Mac: Docker → Settings → Resources → give **≥ 6 CPUs and 12–16 GB RAM**
+3. About **40–60 GB** free disk on small machines / MacBooks (more if you install large models later)
 
 ## Install in 3 steps
 

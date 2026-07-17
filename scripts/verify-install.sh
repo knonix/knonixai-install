@@ -223,6 +223,17 @@ if [[ "${mode}" == "connected" ]]; then
 fi
 
 echo
+echo "-- Preflight mounts --"
+if [[ -f scripts/preflight-mounts.sh ]]; then
+  if bash scripts/preflight-mounts.sh; then
+    echo "OK    bind-mount sources present"
+  else
+    echo "FAIL  missing compose bind-mount sources"
+    fail=1
+  fi
+fi
+
+echo
 echo "-- Sessions & Spaces (multi-user / org-only) --"
 # DB-level proof: auth sessions are per user_id; Spaces listed via space_members ∩ org.
 if "${DOCKER[@]}" compose exec -T postgres psql -U "${POSTGRES_USER:-knonixai}" -d "${POSTGRES_DB:-knonixai}" -v ON_ERROR_STOP=1 -c "

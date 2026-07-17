@@ -198,6 +198,22 @@ const ENSURE_RELATED_FN =
   }
 }
 
+// --- 4c) Chat waiting status: one clean "Working" line (not Thinking+Working+Preparing) ---
+// Stock UI rotates Connecting → Thinking → Working with long detail copy; on CPU/Mac VMs
+// that feels like multiple stuck states. Collapse to a single Working + elapsed label.
+{
+  const OLD_WAIT =
+    'c<3?{label:"Connecting",detail:"Sending your message inside your boundary"}:c<12?{label:"Thinking",detail:"Local model is preparing a response"}:c<35?{label:"Working",detail:"May load the model into memory, use tools, or draft a long answer"}:{label:"Still working",detail:"Large prompts and cold CPU models can take a minute — hang tight"}';
+  // Keep label "Working" the whole time; short detail only after 20s (cold model).
+  const NEW_WAIT =
+    'c<20?{label:"Working",detail:""}:{label:"Working",detail:"Local model is still generating — long answers and cold starts take time"}';
+  let waitOk = false;
+  for (const f of allFiles) {
+    if (patchFile(f, OLD_WAIT, NEW_WAIT, "waiting-status-simple")) waitOk = true;
+  }
+  if (!waitOk) console.log("[knonix-entrypoint] waiting-status-simple: pattern not found");
+}
+
 // --- 5) Thinking dots cleanup: only ONE bounce-dot group (activity header) ---
 // List rows previously also rendered bounce dots + spin icons per active step.
 {
@@ -237,8 +253,10 @@ const ENSURE_RELATED_FN =
 }
 
 // --- 6) Chat resources rail (links / files / artifacts) — right side, collapsible ---
-// Collects visitedSources, tool search/fetch URLs, uploads, and shows them per chat.
-{
+// DISABLED: previous injection produced SyntaxError in SSR chunks (_0.ww79x._.js)
+// ("missing ) after argument list") → Next __next_error__ black screen.
+// Re-enable only after map/jsx closing-paren structure is validated with acorn.
+if (process.env.KNONIX_ENABLE_RESOURCES_RAIL === "1") {
   // Resource collector + collapsible rail (uses ChatMessages module aliases: t=jsx,s=react,n=cn)
   const RAIL_FN_STATIC =
     'function KnonixResourcesRail({sections:e}){let[a,r]=(0,s.useState)(!0),i=(0,s.useMemo)(()=>{let t=[],l=[],o=new Set;function c(e,s){if(!e||o.has(e))return;try{new URL(e)}catch{return}o.add(e),t.push({url:e,title:(s||e).slice(0,120)})}function d(e,s,a){l.push({name:e||"File",url:s||"",kind:a||"file"})}for(let s of e||[]){let a=s.userMessage;if(a?.parts)for(let e of a.parts){if("file"===e.type)d(e.filename||e.name,e.url,"upload");if("text"===e.type&&"string"==typeof e.text){let s=e.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let e of s)c(e.replace(/[.,;:]+$/,""),e)}}for(let a of s.assistantMessages||[]){if(Array.isArray(a.metadata?.visitedSources))for(let e of a.metadata.visitedSources)e?.url&&c(e.url,e.title);if(a.parts)for(let e of a.parts){if("tool-search"===e.type&&e.output?.results)for(let s of e.output.results)c(s.url||s.link,s.title);if("tool-fetch"===e.type){let s=e.input?.url||e.output?.url||e.output?.results?.[0]?.url;s&&c(s,e.output?.results?.[0]?.title||s)}if("file"===e.type)d(e.filename||e.name,e.url,"file");if(e.type&&String(e.type).includes("office")||"data-officeDocument"===e.type)d(e.data?.filename||e.filename||"Document",e.data?.url||e.url||"","artifact");if("text"===e.type&&"string"==typeof e.text){let s=e.text.match(/https?:\\/\\/[^\\s)\\]>\'"\\]]+/g)||[];for(let e of s)c(e.replace(/[.,;:]+$/,""),e)}}}}return{links:t,files:l}},[e]),l=i.links.length+i.files.length;if(0===l)return null;return(0,t.jsxs)("aside",{className:(0,n.cn)("knonix-resources-rail hidden md:flex shrink-0 flex-col border-l bg-card/40 backdrop-blur-sm transition-[width] duration-200",a?"w-72":"w-10"),"aria-label":"Chat resources",children:[(0,t.jsxs)("button",{type:"button",onClick:()=>r(e=>!e),className:"flex h-11 items-center gap-2 border-b px-2 text-xs font-medium text-muted-foreground hover:text-foreground",title:a?"Collapse resources":"Expand resources",children:[(0,t.jsx)("span",{className:"inline-flex size-6 items-center justify-center rounded-md border bg-background text-[11px]",children:a?"»":"«"}),(0,t.jsx)("span",{className:(0,n.cn)("truncate",!a&&"sr-only"),children:`Resources (${l})`})]}),a?(0,t.jsxs)("div",{className:"min-h-0 flex-1 space-y-4 overflow-y-auto p-3 text-sm",children:[i.files.length?(0,t.jsxs)("div",{children:[(0,t.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Files & artifacts"}),(0,t.jsx)("ul",{className:"space-y-1.5",children:i.files.map((e,s)=>(0,t.jsx)("li",{className:"rounded-md border bg-background/80 px-2 py-1.5",children:e.url?(0,t.jsx)("a",{href:e.url,target:"_blank",rel:"noopener noreferrer",className:"block truncate text-primary hover:underline",children:e.name}):(0,t.jsx)("span",{className:"truncate",children:e.name})},s))}]}):null,i.links.length?(0,t.jsxs)("div",{children:[(0,t.jsx)("h3",{className:"mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground",children:"Links & sources"}),(0,t.jsx)("ul",{className:"space-y-1.5",children:i.links.slice(0,40).map((e,s)=>(0,t.jsx)("li",{children:(0,t.jsxs)("a",{href:e.url,target:"_blank",rel:"noopener noreferrer",className:"block rounded-md border bg-background/80 px-2 py-1.5 hover:border-primary/40",children:[(0,t.jsx)("span",{className:"line-clamp-2 text-foreground",children:e.title}),(0,t.jsx)("span",{className:"mt-0.5 block truncate text-[11px] text-muted-foreground",children:e.url.replace(/^https?:\\/\\//,"")})]})},s))}]}):null,0===l?(0,t.jsx)("p",{className:"text-xs text-muted-foreground",children:"Links, files, and sources from this chat appear here."}):null]}):null])}';
@@ -334,6 +352,8 @@ const ENSURE_RELATED_FN =
   } else {
     console.log("[knonix-entrypoint] resources-rail: applied");
   }
+} else {
+  console.log("[knonix-entrypoint] resources-rail: skipped (set KNONIX_ENABLE_RESOURCES_RAIL=1 to enable)");
 }
 NODE
 else

@@ -56,8 +56,13 @@ Migrations run **automatically** on app container start.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL inside Docker |
-| `OLLAMA_NUM_CTX` | `3072` | Context window (raise on GPU / large RAM) |
-| `OLLAMA_NUM_PREDICT` | `768` | Max new tokens per generation |
+| `OLLAMA_NUM_CTX` | `1536` (low) / `2048` (medium) / `4096` (high) | Context window; install auto-sets via hardware profile |
+| `OLLAMA_NUM_PREDICT` | `256` / `512` / `1024` | Max new tokens; keep short on CPU / Mac VMs |
+| `OLLAMA_MAX_LOADED_MODELS` | `1` | Avoid multi-model thrash on 16 GB hosts |
+| `OLLAMA_NUM_PARALLEL` | `1` | Concurrent Ollama slots |
+| `KNONIX_MODEL` | `qwen2.5:3b` (low) | Instruct model — not qwen3 thinking by default |
+| `KNONIX_LICENSE_MODE` | `connected` | Use `offline` for air-gap / GCC (disables heartbeat-cron) |
+| `KNONIX_AUTH_DISABLE_SIGNUP` | `false` | Set `true` after first owner on public domains |
 | `OLLAMA_KEEP_ALIVE` | `-1` | Keep model loaded (`-1` = always) |
 | `KNONIX_MODEL` | `qwen2.5:7b` | Default chat model |
 | `KNONIX_CODING_MODEL` | `qwen2.5-coder:7b` | Default coding model |

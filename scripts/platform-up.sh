@@ -48,7 +48,13 @@ COMPOSE=(docker compose
   -f docker-compose.proxy.yml
   -f docker-compose.platform.yml
   -f docker-compose.fix-health.yml
-  --profile auth)
+  --profile auth
+  --profile connected)
+# NVIDIA GPU host (optional)
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1 \
+  && [[ -f docker-compose.gpu.yml ]]; then
+  COMPOSE+=(-f docker-compose.gpu.yml)
+fi
 
 echo "==> Building license-service image"
 docker build -t "knonix/license-service:local" ./platform/license-service

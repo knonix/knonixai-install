@@ -312,11 +312,16 @@ fi
 if declare -F detect_hardware_profile >/dev/null 2>&1; then
   read -r HW_PROFILE HW_MEM_GB HW_GPU HW_CORES HW_VRAM_MB < <(detect_hardware_profile)
   echo "==> Hardware profile: $(profile_description "${HW_PROFILE}")"
-  echo "    Detected: ${HW_MEM_GB} GB RAM, ${HW_CORES} CPU threads, GPU=${HW_GPU} (VRAM≈${HW_VRAM_MB} MB)"
+  echo "    Detected: ${HW_MEM_GB} GB RAM, ${HW_CORES} inference threads, GPU=${HW_GPU} (VRAM≈${HW_VRAM_MB} MB)"
+  if declare -F host_environment_hint >/dev/null 2>&1; then
+    echo "    Host: $(host_environment_hint)"
+  fi
   apply_hardware_profile_env "${HW_PROFILE}" "${HW_CORES}"
   if [[ "${HW_PROFILE}" == "low" ]]; then
     echo "    Low-resource mode: default model qwen2.5:3b (override in .env or Admin → Models)."
-    echo "    Tip: Cloud-class speed needs a GPU host or frontier APIs for non-CUI work."
+    echo "    Tip: On MacBook / nested VMs there is no Apple Metal for Ollama — keep 3B + Quick mode."
+    echo "    Tip: Cloud-class speed needs a GPU Linux host or optional frontier APIs for non-CUI work."
+    echo "    Mac guide: docs/MACOS.md"
   fi
 else
   set_env_if_absent KNONIX_MODEL "qwen2.5:3b"
@@ -448,6 +453,21 @@ COMPOSE_ARGS=(-f "${COMPOSE_FILE}")
 if [[ "${AUTH_ENABLED}" == "true" ]]; then
   COMPOSE_ARGS+=(--profile auth)
 fi
+# Seat heartbeats only when connected to Knonix billing (no outbound cron in offline/gov).
+LICENSE_MODE_COMPOSE="$(read_env KNONIX_LICENSE_MODE)"
+LICENSE_MODE_COMPOSE="${LICENSE_MODE_COMPOSE:-connected}"
+if [[ "${LICENSE_MODE_COMPOSE}" == "connected" ]]; then
+  COMPOSE_ARGS+=(--profile connected)
+  echo "==> License mode: connected (daily seat heartbeat enabled)"
+else
+  echo "==> License mode: ${LICENSE_MODE_COMPOSE} (no outbound heartbeat-cron)"
+fi
+# NVIDIA GPU for Ollama when toolkit is present (skip on Mac VMs / CPU hosts).
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1 \
+  && [[ -f docker-compose.gpu.yml ]]; then
+  COMPOSE_ARGS+=(-f docker-compose.gpu.yml)
+  echo "==> NVIDIA GPU detected — enabling docker-compose.gpu.yml for Ollama"
+fi
 if [[ -n "${KNONIX_DOMAIN}" ]]; then
   if [[ ! -f "${PROXY_FILE}" ]]; then
     echo "ERROR: KNONIX_DOMAIN is set but ${PROXY_FILE} is missing." >&2
@@ -460,8 +480,13 @@ if [[ -n "${KNONIX_DOMAIN}" ]]; then
     echo "    NOTE: KNONIX_ACME_EMAIL is empty. Set it in .env for cert-expiry notices."
   fi
   echo "    Requirements: DNS A/AAAA for ${KNONIX_DOMAIN} -> this host, and ports 80+443 open."
+  # Internet-facing installs: prefer invite-only (first-user race + open signup is risky).
+  if [[ "${KNONIX_DOMAIN}" != "localhost" && -z "$(read_env KNONIX_AUTH_DISABLE_SIGNUP)" ]]; then
+    set_env_if_absent KNONIX_AUTH_DISABLE_SIGNUP "false"
+    echo "    Tip: set KNONIX_AUTH_DISABLE_SIGNUP=true after creating the first owner (GCC/public)."
+  fi
 else
-  echo "==> Local mode: serving at http://localhost:3000 (no domain configured)"
+  echo "==> Local mode: serving at http://127.0.0.1:3000 (no domain configured)"
   echo "    KNONIX_DOMAIN was empty (checked $(pwd)/.env)."
   if [[ ! -f .env ]]; then
     echo "    NOTE: no .env file found here. Copy it first: cp .env.example .env"
@@ -539,6 +564,15 @@ if [[ "${TAG}" != "local" ]]; then
     echo "       (read:packages) or 'docker login ghcr.io'. Questions: sales@knonix.com." >&2
     exit 1
   fi
+fi
+
+echo "==> Preflight bind-mount sources (SearXNG / heartbeat / entrypoint)"
+if [[ -x scripts/preflight-mounts.sh ]]; then
+  bash scripts/preflight-mounts.sh
+elif [[ -f scripts/preflight-mounts.sh ]]; then
+  bash scripts/preflight-mounts.sh
+else
+  echo "WARNING: scripts/preflight-mounts.sh missing — compose may mount empty dirs"
 fi
 
 echo "==> Starting the KnonixAI stack (customer compose — no platform fleet service)"

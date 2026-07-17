@@ -1,0 +1,16 @@
+# Optional NVIDIA GPU acceleration for Ollama.
+# Used automatically by install.sh when nvidia-smi is present, or manually:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Requires: NVIDIA driver + nvidia-container-toolkit on the host.
+# Does nothing useful on Mac / nested VMs (no Metal/GPU passthrough).
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

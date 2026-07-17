@@ -17,6 +17,9 @@ Check for updates on an install:
 ## [1.6.1] — 2026-07-13
 
 ### Added
+- **macOS / MacBook Pro guide** (`docs/MACOS.md`): Docker Desktop + Ubuntu-on-Mac VMs.
+- Hardware profile detects nested VMs / Apple-hosted guests, leaves host CPU free, and
+  defaults Mac/VM installs to interactive **3B** models (no Metal GPU in containers).
 - Org-only Spaces collaboration (create-time share + membership trigger + sync script).
 - Per-user session / Spaces checks in `verify-install.sh`.
 - GHCR publish workflow (`.github/workflows/publish-ghcr.yml`).
@@ -24,6 +27,11 @@ Check for updates on an install:
 ### Fixed
 - Space create only granted access to the creator; other org members could not list Spaces.
 - Entrypoint org-share patch covered all minified schema aliases.
+- Chat waiting UX: single **Working** status (no rotating Thinking/Preparing copy).
+- Compose healthchecks for Ollama + app; app waits until Ollama is healthy.
+- Customer app port bound to loopback; heartbeat-cron only with `--profile connected`.
+- Preflight for SearXNG/heartbeat bind-mount sources; GPU overlay when NVIDIA present.
+- Removed test Space “Collab Verify Space” from live DB (Knonix Corp remains).
 
 ### Upgrade notes
 ```bash
