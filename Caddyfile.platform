@@ -41,9 +41,19 @@
 		reverse_proxy license-service:8787
 	}
 
+	# knonixai container IP changes on recreate. Use dynamic A refresh so Caddy
+	# does not keep dialing a dead Docker IP (which surfaced as 502 / blank UI).
 	handle /api/knonix/models/pull* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 2h
 				write_timeout 2h
@@ -52,8 +62,16 @@
 	}
 
 	handle /api/chat* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 15m
 				write_timeout 15m
@@ -62,8 +80,16 @@
 		}
 	}
 	handle /api/coding* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 15m
 				write_timeout 15m
@@ -72,8 +98,16 @@
 		}
 	}
 
-	reverse_proxy knonixai:3000 {
+	reverse_proxy {
+		dynamic a knonixai {
+			port 3000
+			refresh 5s
+			dial_timeout 3s
+			versions ipv4
+		}
 		flush_interval -1
+		lb_try_duration 10s
+		lb_try_interval 250ms
 		transport http {
 			read_timeout 10m
 			write_timeout 10m

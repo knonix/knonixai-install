@@ -41,10 +41,20 @@
 		reverse_proxy supabase-kong:8000
 	}
 
+	# knonixai container IP changes on recreate. Dynamic A refresh avoids Caddy
+	# dialing a dead Docker IP (502 / blank or black page in the browser).
 	# Model pulls stream for a long time — disable proxy buffering/timeouts.
 	handle /api/knonix/models/pull* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 2h
 				write_timeout 2h
@@ -55,8 +65,16 @@
 	# Chat / coding SSE streams — flush immediately so clients see tokens/tools
 	# and do not surface a generic "network error" while the local model works.
 	handle /api/chat* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 15m
 				write_timeout 15m
@@ -65,8 +83,16 @@
 		}
 	}
 	handle /api/coding* {
-		reverse_proxy knonixai:3000 {
+		reverse_proxy {
+			dynamic a knonixai {
+				port 3000
+				refresh 5s
+				dial_timeout 3s
+				versions ipv4
+			}
 			flush_interval -1
+			lb_try_duration 10s
+			lb_try_interval 250ms
 			transport http {
 				read_timeout 15m
 				write_timeout 15m
@@ -76,8 +102,16 @@
 	}
 
 	# App (Next.js) — everything else routes here by default.
-	reverse_proxy knonixai:3000 {
+	reverse_proxy {
+		dynamic a knonixai {
+			port 3000
+			refresh 5s
+			dial_timeout 3s
+			versions ipv4
+		}
 		flush_interval -1
+		lb_try_duration 10s
+		lb_try_interval 250ms
 		transport http {
 			read_timeout 10m
 			write_timeout 10m
