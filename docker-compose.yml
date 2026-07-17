@@ -24,9 +24,11 @@
 name: knonixai
 services:
   knonixai:
+    # Pin in .env: KNONIX_IMAGE_TAG=v1.6.1 (or digest) for air-gap; avoid floating latest in prod.
     image: ghcr.io/knonix/knonixai:${KNONIX_IMAGE_TAG:-latest}
     # "local" tags are built on this host — do not try to pull them from GHCR.
-    pull_policy: ${KNONIX_IMAGE_PULL_POLICY:-always}
+    # Prefer missing/never for air-gap; set always only when you want auto-updates.
+    pull_policy: ${KNONIX_IMAGE_PULL_POLICY:-missing}
     restart: unless-stopped
     # Runtime patch for Next.js health check (NEXT_PUBLIC_* empty at image build).
     # No-op once the published image ships the fixed health route. See
@@ -55,15 +57,14 @@ services:
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
       KNONIX_AUTH_SITE_URL: ${KNONIX_AUTH_SITE_URL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      # Low-resource defaults (install.sh overrides from hardware-profile.sh).
-      # 3B + short context = interactive on 8–16 GB CPU / small VMs.
-      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-1536}
-      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-256}
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
-      # Prefer qwen2.5:3b on CPU; raise to 7B only when RAM/GPU allows.
-      KNONIX_MODEL: ${KNONIX_MODEL:-qwen2.5:3b}
-      KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5:3b}
-      INFERENCE_MAX_OUTPUT_TOKENS: ${INFERENCE_MAX_OUTPUT_TOKENS:-512}
+      # Defaults favor capable hosts; install.sh/hardware-profile override for low/CPU/Mac.
+      # Instruct models (not qwen3 thinking). GPU: qwen2.5:7b; CPU eval: qwen2.5:3b.
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-4096}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+      KNONIX_MODEL: ${KNONIX_MODEL:-qwen2.5:7b}
+      KNONIX_CODING_MODEL: ${KNONIX_CODING_MODEL:-qwen2.5-coder:7b}
+      INFERENCE_MAX_OUTPUT_TOKENS: ${INFERENCE_MAX_OUTPUT_TOKENS:-4096}
       KNONIX_WORKSPACES_ROOT: /var/knonix/workspaces
       # Optional install-wide PATs for Code workspace private clones
       KNONIX_GITHUB_TOKEN: ${KNONIX_GITHUB_TOKEN:-}
@@ -71,7 +72,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-${KNONIX_GITHUB_TOKEN:-}}
       GITLAB_TOKEN: ${GITLAB_TOKEN:-${KNONIX_GITLAB_TOKEN:-}}
       # Auth UI reads these at runtime (OAuth buttons, signup confirmation copy).
-      KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
+      KNONIX_AUTH_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-false}
       KNONIX_AUTH_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
       KNONIX_AUTH_GOOGLE_ENABLED: ${KNONIX_AUTH_GOOGLE_ENABLED:-false}
       KNONIX_AUTH_AZURE_ENABLED: ${KNONIX_AUTH_AZURE_ENABLED:-false}
@@ -85,7 +86,8 @@ services:
       # Connected mode: OUTBOUND seat heartbeats to Knonix only (billing accuracy).
       # Customers never host fleet admin. PLATFORM_OWNER=true only on Knonix platform host.
       # See docs/PUBLIC_VS_PLATFORM.md
-      KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-connected}
+      # Default offline (no seat egress). Opt in to connected for commercial billing.
+      KNONIX_LICENSE_MODE: ${KNONIX_LICENSE_MODE:-offline}
       KNONIX_FREE_SEATS: ${KNONIX_FREE_SEATS:-1}
       KNONIX_PLATFORM_OWNER: ${KNONIX_PLATFORM_OWNER:-false}
       KNONIX_LICENSE_KEY: ${KNONIX_LICENSE_KEY:-}
@@ -110,7 +112,7 @@ services:
       OLLAMA_REPEAT_PENALTY: ${OLLAMA_REPEAT_PENALTY:-1.1}
       INFERENCE_TEMPERATURE: ${INFERENCE_TEMPERATURE:-${OLLAMA_TEMPERATURE:-0.6}}
       INFERENCE_TOP_P: ${INFERENCE_TOP_P:-${OLLAMA_TOP_P:-0.9}}
-      INFERENCE_NUM_CTX: ${INFERENCE_NUM_CTX:-${OLLAMA_NUM_CTX:-1536}}
+      INFERENCE_NUM_CTX: ${INFERENCE_NUM_CTX:-${OLLAMA_NUM_CTX:-8192}}
       SEARCH_API: ${SEARCH_API:-searxng}
       SEARXNG_API_URL: ${SEARXNG_API_URL:-http://searxng:8080}
     # Loopback only — Caddy reaches knonixai on the compose network by name.
@@ -147,19 +149,20 @@ services:
   #   docker compose exec ollama ollama pull nomic-embed-text
   # (or Admin → Models). NVIDIA GPU: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
   ollama:
-    image: ollama/ollama:latest
+    # Pin with OLLAMA_IMAGE_TAG (e.g. 0.6.5) for air-gap; default tracks a stable channel.
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-latest}
     restart: unless-stopped
     # Loopback only — Docker published ports bypass UFW; never expose the LLM API.
     ports:
       - '127.0.0.1:${OLLAMA_PORT:-11434}:11434'
     volumes:
       - ollama_data:/root/.ollama
-    # CPU / Mac VM defaults: one model loaded, controlled concurrency.
+    # Tunable concurrency (avoid OOM on 16 GB: lower PARALLEL/MAX_LOADED in .env).
     # On NVIDIA hosts, install.sh adds docker-compose.gpu.yml automatically.
     environment:
-      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
-      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-2}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
       OLLAMA_FLASH_ATTENTION: ${OLLAMA_FLASH_ATTENTION:-1}
       OLLAMA_NUM_THREAD: ${OLLAMA_NUM_THREAD:-8}
     healthcheck:
@@ -231,7 +234,8 @@ services:
         fi
 
   searxng:
-    image: searxng/searxng
+    # Pin with SEARXNG_IMAGE_TAG for reproducible air-gap pulls.
+    image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
     restart: unless-stopped
     # Loopback only — app reaches SearXNG on the Docker network.
     ports:
@@ -286,10 +290,11 @@ services:
       GOTRUE_JWT_ADMIN_ROLES: service_role
       # Email/password signups.
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${KNONIX_AUTH_ENABLE_EMAIL_SIGNUP:-true}
-      GOTRUE_DISABLE_SIGNUP: ${KNONIX_AUTH_DISABLE_SIGNUP:-false}
-      # Auto-confirm so accounts work WITHOUT wiring an SMTP server. Set to
-      # false only after you configure the SMTP_* variables below.
-      GOTRUE_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-true}
+      # Invite-only by default; install.sh bootstraps or temporarily opens signup for first owner.
+      GOTRUE_DISABLE_SIGNUP: ${KNONIX_AUTH_DISABLE_SIGNUP:-true}
+      # Prefer false for public domain (require confirmation once SMTP is set).
+      # Local installs may set KNONIX_AUTH_MAILER_AUTOCONFIRM=true in .env.
+      GOTRUE_MAILER_AUTOCONFIRM: ${KNONIX_AUTH_MAILER_AUTOCONFIRM:-false}
       # Optional in-boundary SMTP for real confirmation/recovery emails.
       GOTRUE_SMTP_ADMIN_EMAIL: ${KNONIX_AUTH_SMTP_ADMIN_EMAIL:-}
       GOTRUE_SMTP_HOST: ${KNONIX_AUTH_SMTP_HOST:-}
