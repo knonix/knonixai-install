@@ -1,3 +1,9 @@
+## 1.6.3
+
+- Single Working wait row (no triple dots / dual labels)
+- Related follow-ups: server-only inject grounded on user query (no raw ```spec dump)
+- Caddy re-resolves knonixai after container recreate
+
 # Changelog
 
 All notable changes to the **KnonixAI installer** and the published customer
