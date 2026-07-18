@@ -1,5 +1,11 @@
 # Publish customer app image to GHCR: ghcr.io/knonix/knonixai
 # Builds on top of the current :latest base, bakes knonix-entrypoint + health patch.
+#
+# Auth note:
+#   The package ghcr.io/knonix/knonixai is linked to knonix/KnonixAI, so this
+#   repo's default GITHUB_TOKEN cannot push (permission_denied: write_package).
+#   Set repo secret GHCR_TOKEN to a classic PAT with write:packages (and
+#   optionally read:packages). Optional GHCR_USER (default: knonix).
 name: Publish GHCR image
 
 on:
@@ -43,12 +49,25 @@ jobs:
           echo "ver=${VER}" >> "$GITHUB_OUTPUT"
           echo "Publishing installer version ${VER}"
 
+      # Prefer GHCR_TOKEN (PAT) because GITHUB_TOKEN from this repo cannot write
+      # packages owned/linked by knonix/KnonixAI.
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.GHCR_USER || 'knonix' }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Verify package write credentials
+        run: |
+          if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then
+            echo "::warning::GHCR_TOKEN secret is not set. Push may fail with"
+            echo "::warning::permission_denied: write_package because the package"
+            echo "::warning::is linked to knonix/KnonixAI. Add a classic PAT with"
+            echo "::warning::write:packages as repo secret GHCR_TOKEN."
+          else
+            echo "Using GHCR_TOKEN for package write."
+          fi
 
       - name: Pull base image
         run: docker pull "${BASE_IMAGE}"
@@ -82,6 +101,8 @@ jobs:
       - name: Push tags
         run: |
           VER="${{ steps.ver.outputs.ver }}"
+          set -e
           docker push "${IMAGE}:v${VER}"
           docker push "${IMAGE}:latest"
           docker push "${IMAGE}:installer-${VER}"
+          echo "Published ${IMAGE}:v${VER} :latest :installer-${VER}"
